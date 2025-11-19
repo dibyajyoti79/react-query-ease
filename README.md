@@ -1,6 +1,6 @@
 ## react-query-ease
 
-Minimal Axios + React Query helper. Create an Axios client per service and call `client.useQuery` / `client.useMutation` with just method + endpoint (+ optional overrides).
+Minimal Axios + React Query helper. Create per-service clients and use `client.useQuery` / `client.useMutation` without repeating Axios boilerplate.
 
 ### Install
 
@@ -9,29 +9,65 @@ npm install react-query-ease
 npm install react @tanstack/react-query
 ```
 
-### Usage
+### Quick example
 
-```ts
+```tsx
 import { createApiClient } from "react-query-ease";
 
 const api = createApiClient({
   baseURL: "https://api.example.com",
 });
 
-const todosQuery = api.useQuery({
-  endpoint: "/todos",
-  method: "GET",
-  key: ["todos"],
-});
+const useTodos = () => {
+  const query = api.useQuery({
+    endpoint: "/todos",
+    method: "GET",
+    key: ["todos"],
+  });
 
-const createTodoMutation = api.useMutation({
-  endpoint: "/todos",
-  method: "POST",
-  invalidateKeys: ["todos"],
-});
+  return {
+    todos: query.data ?? [],
+    isLoadingTodos: query.isLoading,
+    ...query,
+  };
+};
 
-`key` is required for queries so you control the React Query cache.
-`invalidateKeys` automatically calls `queryClient.invalidateQueries` for those keys after a successful mutation. Pass a single key, string, or array of keys.
+const useCreateTodo = () => {
+  const mutation = api.useMutation({
+    endpoint: "/todos",
+    method: "POST",
+    invalidateKeys: ["todos"],
+  });
+
+  return {
+    createTodo: mutation.mutate,
+    isCreatingTodo: mutation.isPending,
+    ...mutation,
+  };
+};
+
+function TodoList() {
+  const { todos, isLoadingTodos } = useTodos();
+  const { createTodo, isCreatingTodo } = useCreateTodo();
+
+  if (isLoadingTodos) return <p>Loading...</p>;
+
+  return (
+    <>
+      <button
+        disabled={isCreatingTodo}
+        onClick={() => createTodo({ title: "Buy milk" })}
+      >
+        Add todo
+      </button>
+      <ul>
+        {todos.map((todo) => (
+          <li key={todo.id}>{todo.title}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
 ```
 
-For a full Todo CRUD walkthrough (folder structure, hooks, and components), see `examples/todo-crud.md`. Repository: https://github.com/dibyajyoti79/react-query-ease
+Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md).
