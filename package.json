@@ -1,0 +1,46 @@
+{
+  "name": "react-query-ease",
+  "version": "0.0.1",
+  "description": "A small wrapper around React Query to simplify API clients",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dibyajyoti79/react-query-ease.git"
+  },
+  "homepage": "https://github.com/dibyajyoti79/react-query-ease#readme",
+  "bugs": {
+    "url": "https://github.com/dibyajyoti79/react-query-ease/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "test": "vitest",
+    "lint": "eslint . --ext .ts,.tsx",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "@tanstack/react-query": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.59.16",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.10"
+  },
+  "dependencies": {
+    "axios": "^1.13.2"
+  },
+  "license": "MIT"
+}
