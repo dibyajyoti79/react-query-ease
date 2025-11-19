@@ -1,6 +1,6 @@
 {
   "name": "react-query-ease",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A small wrapper around React Query to simplify API clients",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
