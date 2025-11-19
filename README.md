@@ -70,4 +70,4 @@ function TodoList() {
 }
 ```
 
-Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md).
+Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md).
