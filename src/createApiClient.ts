@@ -21,50 +21,18 @@ type MutationOptions<TData, TError, TVariables> = Omit<
   "mutationFn"
 >;
 
-type QueryConfigFactory =
-  | AxiosRequestConfig
-  | (() => AxiosRequestConfig)
-  | undefined;
-
-type MutationConfigFactory<TVariables> =
-  | AxiosRequestConfig
-  | ((variables: TVariables) => AxiosRequestConfig)
-  | undefined;
-
 type UseClientQueryArgs<TData, TError> = {
-  endpoint: string;
-  method?: Method;
   key: QueryKey | string;
-  config?: QueryConfigFactory;
-  options?: QueryOptions<TData, TError>;
-};
+} & AxiosRequestConfig &
+  QueryOptions<TData, TError>;
 
 type InvalidateKeys = QueryKey | string | Array<QueryKey | string>;
 
 type UseClientMutationArgs<TData, TError, TVariables> = {
-  endpoint: string;
-  method?: Method;
-  config?: MutationConfigFactory<TVariables>;
-  options?: MutationOptions<TData, TError, TVariables>;
-  invalidateKeys?: InvalidateKeys;
-};
-
-const resolveQueryConfig = (config?: QueryConfigFactory) => {
-  if (typeof config === "function") {
-    return config();
-  }
-  return config;
-};
-
-const resolveMutationConfig = <TVariables>(
-  config: MutationConfigFactory<TVariables>,
-  variables: TVariables
-) => {
-  if (typeof config === "function") {
-    return config(variables);
-  }
-  return config;
-};
+  url: string | ((variables: TVariables) => string);
+  keyToInvalidate?: InvalidateKeys;
+} & Omit<AxiosRequestConfig, "url"> &
+  MutationOptions<TData, TError, TVariables>;
 
 const toInvalidateKeyArray = (keys?: InvalidateKeys): QueryKey[] => {
   if (!keys) {
@@ -118,20 +86,21 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
   const useClientQuery = <TData = unknown, TError = unknown>(
     args: UseClientQueryArgs<TData, TError>
   ) => {
-    const { endpoint, method = "GET", key, config, options } = args;
+    const { url, method = "GET", params, data, key, ...rest } = args;
     const queryKey = normalizeKey(key);
 
     return useQuery<TData, TError, TData, QueryKey>({
       queryKey,
       queryFn: () => {
-        const resolved = resolveQueryConfig(config) ?? {};
         return request<TData>({
-          ...resolved,
-          url: resolved.url ?? endpoint,
-          method: (resolved.method as Method | undefined) ?? method,
+          ...rest,
+          url,
+          method,
+          params,
+          data,
         });
       },
-      ...(options ?? {}),
+      ...rest,
     });
   };
 
@@ -143,26 +112,36 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     args: UseClientMutationArgs<TData, TError, TVariables>
   ) => {
     const queryClient = useQueryClient();
-    const { endpoint, method = "POST", config, options, invalidateKeys } = args;
-    const keysToInvalidate = toInvalidateKeyArray(invalidateKeys);
-    const { onSuccess, ...restOptions } = options ?? {};
+    const {
+      url,
+      method = "POST",
+      data,
+      params,
+      keyToInvalidate,
+      onSuccess,
+      ...rest
+    } = args;
+    const keysToInvalidate = toInvalidateKeyArray(keyToInvalidate);
 
     return useMutation<TData, TError, TVariables>({
       mutationFn: (variables: TVariables) => {
-        const resolved = resolveMutationConfig(config, variables) ?? {};
+        const finalUrl = typeof url === "function" ? url(variables) : url;
         const finalConfig: AxiosRequestConfig = {
-          ...resolved,
-          url: resolved.url ?? endpoint,
-          method: (resolved.method as Method | undefined) ?? method,
+          ...rest,
+          url: finalUrl,
+          method,
+          params,
+          data,
         };
 
+        // Auto-use variables as data if data wasn't provided
         if (variables !== undefined && finalConfig.data === undefined) {
           finalConfig.data = variables;
         }
 
         return request<TData>(finalConfig);
       },
-      ...restOptions,
+      ...rest,
       onSuccess: async (data, variables, context, mutation) => {
         if (onSuccess) {
           await onSuccess(data, variables, context, mutation);

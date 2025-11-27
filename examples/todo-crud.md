@@ -39,7 +39,7 @@ export type TodoSearchFilters = { query: string };
 
 export const useTodos = () => {
   const query = todosApi.useQuery<Todo[]>({
-    endpoint: "/todos",
+    url: "/todos",
     method: "GET",
     key: ["todos"],
   });
@@ -53,12 +53,10 @@ export const useTodos = () => {
 
 export const useSearchTodos = (filters: TodoSearchFilters) => {
   const query = todosApi.useQuery<Todo[]>({
-    endpoint: "/todos/search",
+    url: "/todos/search",
     method: "GET",
     key: ["todos", "search", filters.query],
-    config: () => ({
-      params: { q: filters.query },
-    }),
+    params: { q: filters.query },
   });
 
   return {
@@ -74,9 +72,9 @@ export const useCreateTodo = () => {
     unknown,
     NewTodo
   >({
-    endpoint: "/todos",
+    url: "/todos",
     method: "POST",
-    invalidateKeys: ["todos"],
+    keyToInvalidate: ["todos"],
   });
 
   return {
@@ -92,13 +90,9 @@ export const useUpdateTodo = () => {
     unknown,
     UpdateTodoInput
   >({
-    endpoint: "/todos",
+    url: (variables) => `/todos/${variables.id}`,
     method: "PATCH",
-    invalidateKeys: ["todos"],
-    config: ({ id, ...changes }) => ({
-      url: `/todos/${id}`,
-      data: changes,
-    }),
+    keyToInvalidate: ["todos"],
   });
 
   return {
@@ -114,12 +108,9 @@ export const useDeleteTodo = () => {
     unknown,
     { id: string }
   >({
-    endpoint: "/todos",
+    url: (variables) => `/todos/${variables.id}`,
     method: "DELETE",
-    invalidateKeys: ["todos"],
-    config: ({ id }) => ({
-      url: `/todos/${id}`,
-    }),
+    keyToInvalidate: ["todos"],
   });
 
   return {

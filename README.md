@@ -20,9 +20,10 @@ const api = createApiClient({
 
 const useTodos = () => {
   const query = api.useQuery({
-    endpoint: "/todos",
+    url: "/todos",
     method: "GET",
     key: ["todos"],
+    // All Axios config props (headers, timeout, etc.) and React Query options (staleTime, enabled, etc.) can be passed directly
   });
 
   return {
@@ -34,14 +35,30 @@ const useTodos = () => {
 
 const useCreateTodo = () => {
   const mutation = api.useMutation({
-    endpoint: "/todos",
+    url: "/todos",
     method: "POST",
-    invalidateKeys: ["todos"],
+    keyToInvalidate: ["todos"],
+    // All Axios config props and React Query options can be passed directly
   });
 
   return {
     createTodo: mutation.mutate,
     isCreatingTodo: mutation.isPending,
+    ...mutation,
+  };
+};
+
+// For dynamic URLs in mutations (e.g., `/todos/${id}`), use a function:
+const useUpdateTodo = () => {
+  const mutation = api.useMutation({
+    url: (variables) => `/todos/${variables.id}`, // Dynamic URL from variables
+    method: "PATCH",
+    keyToInvalidate: ["todos"],
+  });
+
+  return {
+    updateTodo: mutation.mutate,
+    isUpdatingTodo: mutation.isPending,
     ...mutation,
   };
 };
