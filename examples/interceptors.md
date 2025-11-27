@@ -1,57 +1,41 @@
 ## Interceptors guide
 
-Attach Axios interceptors when creating the client. Here’s a simple access/refresh token pattern you can adapt.
+Attach Axios interceptors when creating the client. The library ships with a reusable auth interceptor utility that already handles attaching tokens, coalescing refresh calls, and retrying queued requests.
 
 ```ts
-import axios, { AxiosInstance } from "axios";
-import { createApiClient } from "react-query-ease";
+import { createApiClient, createAuthInterceptor } from "react-query-ease";
+import axios from "axios";
 
-type Tokens = {
-  access: string | null;
-  refresh: string | null;
+const tokenStore = {
+  access: null as string | null,
+  refresh: null as string | null,
 };
 
-const tokenStore: Tokens = {
-  access: null,
-  refresh: null,
-};
+const authInterceptor = createAuthInterceptor({
+  getAccessToken: () => tokenStore.access,
+  getRefreshToken: () => tokenStore.refresh,
+  refreshTokens: async ({ refreshToken }) => {
+    const response = await axios.post<{
+      accessToken: string;
+      refreshToken: string;
+    }>("https://auth.example.com/refresh", {
+      refresh_token: refreshToken,
+    });
 
-const refreshTokens = async () => {
-  const response = await axios.post<{
-    access: string;
-    refresh: string;
-  }>("https://auth.example.com/refresh", {
-    refresh_token: tokenStore.refresh,
-  });
+    tokenStore.access = response.data.accessToken;
+    tokenStore.refresh = response.data.refreshToken;
 
-  tokenStore.access = response.data.access;
-  tokenStore.refresh = response.data.refresh;
-};
-
-const withAuthInterceptors = (instance: AxiosInstance) => {
-  instance.interceptors.request.use((config) => {
-    if (tokenStore.access) {
-      config.headers.set("Authorization", `Bearer ${tokenStore.access}`);
-    }
-    return config;
-  });
-
-  instance.interceptors.response.use(
-    (res) => res,
-    async (error) => {
-      if (error.response?.status === 401) {
-        await refreshTokens();
-        return instance.request(error.config);
-      }
-      throw error;
-    }
-  );
-};
+    return response.data;
+  },
+  onRefreshFailure: () => {
+    window.location.assign("/login");
+  },
+});
 
 export const secureApi = createApiClient({
   baseURL: "https://api.example.com",
-  configure: withAuthInterceptors,
+  configure: authInterceptor,
 });
 ```
 
-You can share `withAuthInterceptors` across multiple services or extend it per service (e.g., add tenant headers, logging). The key idea: `configure(instance)` runs once per client and gives you full control over Axios interceptors.
+Need to add rate-limit headers, tenant IDs, or logging? Chain more interceptors inside the same `configure` callback before or after `createAuthInterceptor` runs.

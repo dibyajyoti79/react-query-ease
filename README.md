@@ -88,3 +88,37 @@ function TodoList() {
 ```
 
 Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md).
+
+### Built-in auth interceptor helper
+
+```ts
+import { createApiClient, createAuthInterceptor } from "react-query-ease";
+
+const tokens = {
+  access: null as string | null,
+  refresh: null as string | null,
+};
+
+const authInterceptor = createAuthInterceptor({
+  getAccessToken: () => tokens.access,
+  getRefreshToken: () => tokens.refresh,
+  refreshTokens: async () => {
+    const result = await fetch("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: tokens.refresh }),
+    }).then((res) => res.json());
+
+    tokens.access = result.accessToken;
+    tokens.refresh = result.refreshToken;
+
+    return result;
+  },
+});
+
+export const secureApi = createApiClient({
+  baseURL: "/api",
+  configure: authInterceptor,
+});
+```
+
+`createAuthInterceptor` wires up access-token headers, coalesces simultaneous refreshes, retries queued requests with the fresh token, and allows you to plug in logout/error handling via the options object.
