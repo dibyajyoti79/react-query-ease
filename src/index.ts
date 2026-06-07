@@ -10,3 +10,7 @@ export {
   type StreamConfig,
   type StreamController,
 } from "./createStream";
+export {
+  useStream,
+  type UseStreamOptions,
+} from "./useStream";
