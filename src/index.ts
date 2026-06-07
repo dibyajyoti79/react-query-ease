@@ -5,3 +5,8 @@ export {
   type RefreshContext,
   type RefreshResult,
 } from "./interceptors/createAuthInterceptor";
+export {
+  createStream,
+  type StreamConfig,
+  type StreamController,
+} from "./createStream";

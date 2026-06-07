@@ -137,6 +137,9 @@ export const createAuthInterceptor =
 
     instance.interceptors.request.use(attachAccessToken);
 
+    (instance as any).__authOptions = options;
+    (instance as any).__queueRefresh = queueRefresh;
+
     instance.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {

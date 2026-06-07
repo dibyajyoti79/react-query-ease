@@ -87,7 +87,7 @@ function TodoList() {
 }
 ```
 
-Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md).
+Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md). For native streaming, check the [Streaming Guide](examples/streaming.md).
 
 ### Built-in auth interceptor helper
 

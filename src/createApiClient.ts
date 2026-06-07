@@ -7,6 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { createStream, StreamConfig, StreamController } from "./createStream";
 
 const normalizeKey = (key: QueryKey | string): QueryKey =>
   Array.isArray(key) ? key : [key];
@@ -166,6 +167,7 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     put,
     patch,
     delete: del,
+    stream: (config: StreamConfig) => createStream(instance, config),
     useQuery: useClientQuery,
     useMutation: useClientMutation,
   };
