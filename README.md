@@ -2,6 +2,16 @@
 
 Minimal Axios + React Query helper. Create per-service clients and use `client.useQuery` / `client.useMutation` without repeating Axios boilerplate.
 
+### Claude Code Skill
+
+Get AI-assisted setup, typed hooks, auth interceptors, and streaming — directly in your editor:
+
+```bash
+claude skills install github:dibyajyoti79/react-query-ease
+```
+
+Then trigger with `/react-query-ease` in any Claude Code session.
+
 ### Install
 
 ```bash
