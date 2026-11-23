@@ -114,6 +114,24 @@ function TodoList() {
 
 Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md). For native streaming, check the [Streaming Guide](examples/streaming.md).
 
+### Request helpers
+
+Outside of hooks, every client also has plain request helpers. Each one resolves to the response body (`response.data`).
+
+| Helper | Forms |
+|---|---|
+| `api.get(url, config?)` | Same as Axios |
+| `api.delete(url, config?)` | Same as Axios. A body goes in `config.data` |
+| `api.post` / `api.put` / `api.patch` | `(url, data, config)`, the Axios form, **or** `(url, config)` with the body in `config.data` |
+| `api.request(config)` | Any request |
+
+```ts
+await api.post("/todos", { title: "Buy milk" }, { timeout: 5000 }); // Axios form
+await api.post("/todos", { data: { title: "Buy milk" } });          // config form
+```
+
+> **Watch out:** with only two arguments, the second one is the **config**, not the body. `api.post("/todos", { title })` sends no body. TypeScript flags this, and in development the client logs a warning. Use the 3-argument form, or put the body in `data`.
+
 ### Built-in auth interceptor helper
 
 ```ts
@@ -157,10 +175,11 @@ api = createApiClient({
   configure: createAuthInterceptor({
     getAccessToken: () => tokens.access,
     refreshTokens: () =>
-      api.post<{ accessToken: string }>("/auth/refresh", {
-        data: { refresh_token: tokens.refresh },
-        skipAuth: true,
-      }),
+      api.post<{ accessToken: string }>(
+        "/auth/refresh",
+        { refresh_token: tokens.refresh },
+        { skipAuth: true }
+      ),
     setTokens: (t) => {
       tokens.access = t.accessToken;
     },

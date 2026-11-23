@@ -105,6 +105,20 @@ const AXIOS_KEYS = new Set<string>([
   "skipAuth",
 ]);
 
+/**
+ * True when `value` looks like a request body rather than an Axios config:
+ * a non-plain object (FormData, Blob, array, …), a primitive, or a plain
+ * object with none of Axios's option names.
+ */
+export const looksLikeRequestBody = (value: unknown): boolean => {
+  if (value === undefined || value === null) return false;
+  if (typeof value !== "object") return true;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return true;
+  const names = Object.keys(value);
+  return names.length > 0 && !names.some((name) => AXIOS_KEYS.has(name));
+};
+
 export const splitOptions = (options: Record<string, unknown>) => {
   const axiosConfig: Record<string, unknown> = {};
   const reactQueryOptions: Record<string, unknown> = {};

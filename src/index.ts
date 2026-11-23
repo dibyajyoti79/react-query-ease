@@ -1,4 +1,10 @@
-export { createApiClient } from "./createApiClient";
+export {
+  createApiClient,
+  type ApiClientOptions,
+  type SimpleApiClient,
+  type RequestMethod,
+  type BodyRequestMethod,
+} from "./createApiClient";
 export {
   createAuthInterceptor,
   type AuthInterceptorOptions,

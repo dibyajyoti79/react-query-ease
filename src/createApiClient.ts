@@ -9,7 +9,8 @@ import {
 } from "@tanstack/react-query";
 import { createStream, StreamConfig } from "./createStream";
 import { useStream, UseStreamOptions } from "./useStream";
-import { splitOptions } from "./internal/splitOptions";
+import { looksLikeRequestBody, splitOptions } from "./internal/splitOptions";
+import { devWarnOnce } from "./internal/devWarn";
 
 const normalizeKey = (key: QueryKey | string): QueryKey =>
   Array.isArray(key) ? key : [key];
@@ -83,6 +84,26 @@ export type ApiClientOptions = AxiosRequestConfig & {
   cancelable?: boolean;
 };
 
+/** Request helper without a body: `get(url, config)`, `delete(url, config)`. */
+export type RequestMethod = <T = unknown>(
+  url: string,
+  config?: AxiosRequestConfig
+) => Promise<T>;
+
+/**
+ * Request helper with a body: `post`, `put`, `patch`. Accepts both forms:
+ * - `(url, config)`: put the body in `config.data` (the 0.3.x form)
+ * - `(url, data, config)`: the Axios form
+ */
+export type BodyRequestMethod = {
+  <T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T>;
+  <T = unknown>(
+    url: string,
+    data: unknown,
+    config: AxiosRequestConfig | undefined
+  ): Promise<T>;
+};
+
 export type SimpleApiClient = ReturnType<typeof createApiClient>;
 
 const createRequestHelpers = (instance: AxiosInstance) => {
@@ -92,7 +113,7 @@ const createRequestHelpers = (instance: AxiosInstance) => {
   };
 
   const makeMethod =
-    (method: Method) =>
+    (method: Method): RequestMethod =>
     <T>(url: string, config?: AxiosRequestConfig): Promise<T> =>
       request<T>({
         ...config,
@@ -100,12 +121,31 @@ const createRequestHelpers = (instance: AxiosInstance) => {
         method,
       });
 
+  const makeBodyMethod = (method: Method): BodyRequestMethod =>
+    (<T>(url: string, ...rest: unknown[]): Promise<T> => {
+      // Three arguments: the Axios form (url, data, config).
+      if (rest.length >= 2) {
+        const [data, config] = rest as [unknown, AxiosRequestConfig | undefined];
+        return request<T>({ ...config, data, url, method });
+      }
+
+      // Two arguments: (url, config), unchanged from 0.3.x.
+      const config = rest[0] as AxiosRequestConfig | undefined;
+      if (looksLikeRequestBody(config)) {
+        devWarnOnce(
+          `body-as-config-${method}`,
+          `api.${method.toLowerCase()}(url, config) takes a config object as its second argument, but it looks like a request body, so it will not be sent. Use api.${method.toLowerCase()}(url, { data }) or api.${method.toLowerCase()}(url, data, config).`
+        );
+      }
+      return request<T>({ ...config, url, method });
+    }) as BodyRequestMethod;
+
   return {
     request,
     get: makeMethod("GET"),
-    post: makeMethod("POST"),
-    put: makeMethod("PUT"),
-    patch: makeMethod("PATCH"),
+    post: makeBodyMethod("POST"),
+    put: makeBodyMethod("PUT"),
+    patch: makeBodyMethod("PATCH"),
     del: makeMethod("DELETE"),
   };
 };
