@@ -7,7 +7,7 @@ The `react-query-ease` package provides a first-class, custom React hook `api.us
 ## Why `api.useStream`?
 
 *   **Declarative States**: Exposes standard React state variables (`data`, `isLoading`, `isStreaming`, `error`) that synchronize with your render cycle.
-*   **Safe Cleanup**: Automatically cancels active connections and releases stream reader locks on component unmount, preventing memory leaks.
+*   **Safe Cleanup**: Cancels the connection and releases the stream reader on unmount, even while the request is still connecting.
 *   **Predictable Contract**: The returned `start()` function is strongly typed to return `Promise<StreamController>` or reject with an error, ensuring type safety.
 *   **Zero-Config OAuth integration**: Automatically attaches authorization headers, triggers token refreshes on 401s, coalesces concurrent refreshes, and retries requests under the hood.
 
@@ -30,7 +30,7 @@ const {
 
 ### Options (`UseStreamOptions`)
 
-All static configurations are supplied once during hook initialization:
+Pass the config to the hook. It can be an inline object: `start` stays the same function across renders and uses the latest config each time it runs.
 
 | Option | Type | Description |
 | :--- | :--- | :--- |
@@ -38,6 +38,9 @@ All static configurations are supplied once during hook initialization:
 | `method` | `Method` | HTTP request method. Defaults to `GET`. |
 | `headers` | `Record<string, string>` | Custom headers to append to the fetch request. |
 | `credentials` | `RequestCredentials` | CORS credentials setting (`omit`, `same-origin`, or `include`). |
+| `data` | `unknown` | Default request body. A value passed to `start(variables)` replaces it. |
+| `signal` | `AbortSignal` | Your own abort signal. Aborting it stops the stream, like calling `abort()`. |
+| `skipAuth` | `boolean` | Skip the auth interceptor: no token is attached and a 401 doesn't trigger a refresh. |
 | `onChunk` | `(chunk: string) => void` | Event listener fired whenever a text fragment is received. |
 | `onComplete` | `() => void` | Event listener fired when the stream terminates successfully. |
 | `onError` | `(error: unknown) => void` | Event listener fired when a network error or connection failure occurs. |
@@ -45,11 +48,11 @@ All static configurations are supplied once during hook initialization:
 ### Return Value
 
 *   `data`: The accumulated stream text response (string).
-*   `isLoading`: Connection is opening, or authorization interceptors are checking/refreshing tokens.
-*   `isStreaming`: Active byte chunk transmission is in progress.
+*   `isStreaming`: `true` from `start()` until the stream completes, fails or is aborted.
+*   `isLoading`: Currently always the same as `isStreaming`. To show a "connecting" state, use `isStreaming && !data`.
 *   `error`: Stored error state (if connection fails). *Note: User-initiated abort calls do not pollute the error state.*
-*   `start(variables?: TVariables)`: Launches the stream. Maps `variables` directly to the request's payload data body.
-*   `abort()`: Aborts the active stream connection and clears state flags safely.
+*   `start(variables?: TVariables)`: Launches the stream. `variables` become the request body. Calling `start()` while a stream is running aborts that stream first. Its late chunks and callbacks are ignored, so they can't affect the new one. If the stream is aborted while still connecting, the returned promise rejects with an `AbortError`.
+*   `abort()`: Aborts the stream, including one that is still connecting, and resets the flags. It doesn't set `error`.
 
 ---
 
@@ -71,7 +74,7 @@ export function AIAssistant() {
 
   const {
     data,         // Aggregated text content
-    isLoading,    // Awaiting handshake / token checks
+    isLoading,    // Same as isStreaming
     isStreaming,  // Active streaming in progress
     error,        // Stream error (ignores abort cancellations)
     start,        // Triggers the request
@@ -128,7 +131,7 @@ export function AIAssistant() {
       </form>
 
       {/* State Indicators */}
-      {isLoading && <p style={{ color: "#666" }}>Connecting to stream...</p>}
+      {isStreaming && !data && <p style={{ color: "#666" }}>Connecting to stream...</p>}
       {error && <p style={{ color: "red" }}>Error: {String(error)}</p>}
 
       {/* Accumulated Stream Content */}
@@ -162,7 +165,9 @@ If your client uses `createAuthInterceptor`, the stream request participates in 
 *   Once tokens are renewed, the stream automatically retries once and continues cleanly.
 
 ### 2. Lifespan Protection
-The hook tracks mounting states internally. If a user navigates away or unmounts the component mid-stream:
-1. The active connection is aborted immediately.
-2. The internal `ReadableStream` reader lock is released and cancelled.
-3. State transitions are ignored to avoid React console warnings.
+If a user navigates away or the component unmounts mid-stream, even before the server has answered:
+1. The request is aborted immediately, whether it is still connecting or already streaming.
+2. The internal `ReadableStream` reader is cancelled and released.
+3. Later callbacks are ignored, so no state updates happen after unmount.
+
+The same protection applies when `start()` is called again: the previous stream is aborted, and anything it still delivers is ignored.
