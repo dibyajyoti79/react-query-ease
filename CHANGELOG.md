@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0
+## 0.5.0
 
 Bug fixes that keep existing code working. Two of them change behaviour, and each has a one-line opt-out.
 
