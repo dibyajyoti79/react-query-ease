@@ -1,9 +1,15 @@
 name: CI
 
+# Runs only for pull requests (opened, reopened, or new commits pushed to
+# the PR branch). Plain pushes to a branch without a PR don't trigger it.
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
+  workflow_dispatch: # manual "Run workflow" button in the Actions tab
+
+# Cancel an in-progress run when a newer commit arrives on the same PR.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
