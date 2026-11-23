@@ -147,3 +147,38 @@ export const secureApi = createApiClient({
 ```
 
 `createAuthInterceptor` wires up access-token headers, coalesces simultaneous refreshes, retries queued requests with the fresh token, and allows you to plug in logout/error handling via the options object.
+If your refresh call goes through the same client, mark it with `skipAuth: true`. Otherwise its own 401 would wait on the refresh that is already running:
+
+```ts
+let api: ReturnType<typeof createApiClient>;
+
+api = createApiClient({
+  baseURL: "/api",
+  configure: createAuthInterceptor({
+    getAccessToken: () => tokens.access,
+    refreshTokens: () =>
+      api.post<{ accessToken: string }>("/auth/refresh", {
+        data: { refresh_token: tokens.refresh },
+        skipAuth: true,
+      }),
+    setTokens: (t) => {
+      tokens.access = t.accessToken;
+    },
+  }),
+});
+```
+
+A pending refresh is rejected after `refreshTimeoutMs` (default `30000`; `0` disables it), so requests fail instead of hanging.
+
+### Options
+
+| Option | Where | Default | What it does |
+|---|---|---|---|
+| `paramsInKey` | `createApiClient`, `useQuery` | `true` | Appends `params` to the query key, so each set of params is cached separately. Queries without `params` are unaffected. |
+| `cancelable` | `createApiClient` | `true` | Passes React Query's `AbortSignal` to Axios, so `cancelQueries()` and unmounting abort in-flight requests. |
+| `axios` | `useQuery`, `useMutation` | — | Axios config merged last. Use it for any Axios option you want to set explicitly. |
+| `body` | `useMutation` | — | `(variables) => body`. Builds the request body. Without it, variables are sent as the body (except for `GET`/`HEAD`) unless `data` is set. |
+| `skipAuth` | any request, `stream()` | `false` | Skips the auth interceptor: no token is attached and a 401 doesn't trigger a refresh. |
+| `refreshTimeoutMs` | `createAuthInterceptor` | `30000` | Rejects a refresh that takes longer than this. |
+
+Upgrading from 0.3.x? See the [changelog](CHANGELOG.md) for the two behaviour changes and their opt-outs.
