@@ -1,6 +1,6 @@
 {
   "name": "react-query-ease",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Typed Axios + TanStack React Query API clients in a few lines — useQuery/useMutation hooks, auto cache invalidation, single-flight token refresh, and streaming (SSE/LLM) hooks for React and Next.js.",
   "keywords": [
     "react",
