@@ -44,3 +44,4 @@ You only need to act if one of these applies:
 - The peer range is now `@tanstack/react-query@^4.0.0 || ^5.0.0`. The old range, `>=4.0.0`, would also have allowed a future v6. CI tests both v4 (React 18) and v5 (React 19).
 - The `axios` dependency range is widened from `^1.13.2` to `^1.3.0`, the oldest version that passes the tests and typechecks. If your app already has a compatible Axios, npm and pnpm can now reuse it instead of installing a second copy. That avoids `instanceof AxiosError` and type mismatches between the two copies. Axios stays a regular dependency, so nothing changes for installs. Moving it to a peer dependency is planned for 1.0.
 - Tests: added a Vitest suite with 36 tests.
+- Linting: replaced the unconfigured ESLint setup with [oxlint](https://oxc.rs) (`npm run lint`, also run in CI). Fixing its findings also removed a useless `try/catch` and some `any` casts in `createStream`, and stopped `useStream` from writing a ref during render.

@@ -38,6 +38,7 @@ jobs:
           react@${{ matrix.react }} react-dom@${{ matrix.react }}
           ${{ matrix.axios && format('axios@{0}', matrix.axios) || '' }}
 
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
