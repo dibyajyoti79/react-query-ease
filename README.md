@@ -1,6 +1,21 @@
-## react-query-ease
+# react-query-ease
 
-Minimal Axios + React Query helper. Create per-service clients and use `client.useQuery` / `client.useMutation` without repeating Axios boilerplate.
+[![npm version](https://img.shields.io/npm/v/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
+[![npm downloads](https://img.shields.io/npm/dm/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/react-query-ease)](https://bundlephobia.com/package/react-query-ease)
+[![types](https://img.shields.io/npm/types/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
+[![license](https://img.shields.io/npm/l/react-query-ease.svg)](./LICENSE)
+
+**Typed Axios + TanStack React Query API clients in a few lines.** Create one client per service, then call `api.useQuery` / `api.useMutation` with no repeated Axios boilerplate, query functions, or manual cache invalidation.
+
+### Features
+
+- 🧩 **One client per service.** `createApiClient({ baseURL })` gives you `useQuery`, `useMutation`, and plain `get/post/put/patch/delete` helpers.
+- 🔁 **Auto cache invalidation.** `keyToInvalidate: ["todos"]` refetches queries after a successful mutation.
+- 🔐 **Single-flight token refresh.** `createAuthInterceptor` attaches tokens and refreshes once when several requests get a 401 at the same time, then retries the queued requests.
+- 🌊 **Streaming hooks.** `useStream` streams chunked and SSE responses, such as LLM or AI chat output, and shares the same auth refresh.
+- 🦺 **TypeScript-first.** Generic `TData` / `TError` / `TVariables`, with every Axios and React Query option passed through.
+- ⚛️ **Works with React and Next.js.** Ships ESM and CJS, tree-shakeable with `sideEffects: false`.
 
 ### Claude Code Skill
 
