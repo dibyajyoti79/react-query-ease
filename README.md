@@ -68,17 +68,50 @@ What you stop writing by hand:
 
 Nothing is hidden: every TanStack Query option (`staleTime`, `enabled`, `select`, …) and every Axios option (`headers`, `timeout`, …) still works on the same hook, and `useQueryClient`, devtools and `invalidateQueries` work as usual.
 
-**When you don't need it:** if your backend has an OpenAPI spec, a code generator such as Orval may suit you better. If you only call one or two endpoints, plain TanStack Query is fine.
+### When to use it
 
-### Claude Code Skill
+TanStack Query gives you caching, background refetching, retries and request deduplication. react-query-ease adds the HTTP layer on top: the Axios client, query functions, cache keys, invalidation and token refresh. Use the two together when:
 
-Get AI-assisted setup, typed hooks, auth interceptors, and streaming — directly in your editor:
+- **Your app talks to one or more REST/JSON APIs** and has more than a handful of endpoints, so writing a query function and key for each one is real repetition.
+- **You want Axios features**, such as interceptors, `baseURL`, default headers, timeouts and typed errors with `AxiosError`.
+- **Your API uses access and refresh tokens.** `createAuthInterceptor` handles the 401 → refresh → retry flow, including many requests failing at once.
+- **Mutations should refresh lists**, for example creating a todo refetches `["todos"]`, without wiring `useQueryClient` into every hook.
+- **You stream responses**, such as LLM or AI chat output over SSE, and want streaming to share the same client, auth and refresh as your other requests.
+- **You're on React or Next.js client components** and want typed hooks per service, with one client per backend, for example `authApi`, `billingApi`.
 
-```bash
-claude skills install github:dibyajyoti79/react-query-ease
+**When you don't need it:**
+
+- Your backend has an OpenAPI spec: a code generator such as Orval can generate typed hooks for you.
+- You only call one or two endpoints: plain TanStack Query is fine.
+- You use GraphQL: use a GraphQL client such as Apollo or urql, or TanStack Query with a GraphQL fetcher.
+- You fetch only on the server, in React Server Components or route handlers: React Query's hooks run only in client components.
+
+### Claude Code skill
+
+The repo includes an AI agent skill that sets up react-query-ease for you: API clients, typed hooks, auth interceptors and streaming.
+
+**Claude Code plugin** (Claude Code 2.1.275 or later):
+
+```
+/plugin install react-query-ease --marketplace dibyajyoti79/react-query-ease
 ```
 
-Then trigger with `/react-query-ease` in any Claude Code session.
+On older versions, add the marketplace first, then install:
+
+```
+/plugin marketplace add dibyajyoti79/react-query-ease
+/plugin install react-query-ease@react-query-ease
+```
+
+**Any agent** (Claude Code, Cursor, Copilot, Codex and others), with the [`skills`](https://skills.sh) CLI (Node.js 22.20 or later):
+
+```bash
+npx skills add dibyajyoti79/react-query-ease
+```
+
+Add `-g` to install it for all your projects. Update it later with `npx skills update`.
+
+The skill runs on its own when you ask your agent about data fetching, React Query or Axios setup. In Claude Code you can also run it directly with `/react-query-ease`.
 
 ### Install
 
