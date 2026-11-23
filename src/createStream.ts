@@ -1,5 +1,6 @@
 import { AxiosInstance, AxiosError, Method } from "axios";
 import { AuthInterceptorOptions, RefreshResult } from "./interceptors/createAuthInterceptor";
+import { getAuthState } from "./internal/authRegistry";
 
 export type StreamConfig = {
   url: string;
@@ -8,6 +9,8 @@ export type StreamConfig = {
   data?: unknown;
   signal?: AbortSignal;
   credentials?: RequestCredentials;
+  /** Skip the auth interceptor: no token is attached and a 401 is not refreshed. */
+  skipAuth?: boolean;
 
   onChunk?: (chunk: string) => void;
   onComplete?: () => void;
@@ -21,6 +24,7 @@ export type StreamController = {
   [Symbol.asyncIterator](): AsyncIterator<string>;
 };
 
+/** @deprecated Internal shape; auth state now lives in a private registry. */
 export type ExtendedAxiosInstance = AxiosInstance & {
   __authOptions?: AuthInterceptorOptions;
   __queueRefresh?: (error: AxiosError) => Promise<RefreshResult>;
@@ -200,9 +204,9 @@ export const createStream = async (
       }
     }
 
-    const authInstance = instance as ExtendedAxiosInstance;
-    const authOptions = authInstance.__authOptions;
-    const queueRefresh = authInstance.__queueRefresh;
+    const authState = config.skipAuth ? undefined : getAuthState(instance);
+    const authOptions = authState?.options;
+    const queueRefresh = authState?.queueRefresh;
 
     const mockAxiosConfig = {
       url: config.url,
