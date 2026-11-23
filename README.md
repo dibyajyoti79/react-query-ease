@@ -17,6 +17,59 @@
 - 🦺 **TypeScript-first.** Generic `TData` / `TError` / `TVariables`, with every Axios and React Query option passed through.
 - ⚛️ **Works with React and Next.js.** Ships ESM and CJS, tree-shakeable with `sideEffects: false`.
 
+### Why not just TanStack Query + Axios?
+
+TanStack Query handles caching, not HTTP: you still write a query function for every endpoint, an Axios instance, invalidation logic and token refresh, in every app. react-query-ease is that layer, written once, tested, and built **on top of** TanStack Query, so you keep everything it gives you.
+
+**With TanStack Query + Axios:**
+
+```tsx
+const http = axios.create({ baseURL: "/api" });
+
+const useTodos = (page: number) =>
+  useQuery({
+    queryKey: ["todos", { page }],
+    queryFn: ({ signal }) =>
+      http.get<Todo[]>("/todos", { params: { page }, signal }).then((r) => r.data),
+  });
+
+const useCreateTodo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (todo: NewTodo) => http.post<Todo>("/todos", todo).then((r) => r.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["todos"] }),
+  });
+};
+```
+
+**With react-query-ease:**
+
+```tsx
+const api = createApiClient({ baseURL: "/api" });
+
+const useTodos = (page: number) =>
+  api.useQuery<Todo[]>({ url: "/todos", key: ["todos"], params: { page } });
+
+const useCreateTodo = () =>
+  api.useMutation<Todo, unknown, NewTodo>({ url: "/todos", method: "POST", keyToInvalidate: ["todos"] });
+```
+
+What you stop writing by hand:
+
+| | TanStack Query + Axios | react-query-ease |
+|---|---|---|
+| Query function per endpoint | You write it | Built from `url`, `method` and `params` |
+| `params` in the query key | Easy to forget, which serves stale pages | Added for you |
+| Cancellation on unmount | Pass `signal` yourself, every time | On by default |
+| Invalidate after a mutation | `useQueryClient` + `onSuccess` | `keyToInvalidate: ["todos"]` |
+| Unwrapping `response.data` | Every call | Done for you |
+| Token refresh on 401 | Write your own interceptor, queue and retry | `createAuthInterceptor`: one refresh for many concurrent 401s, then retries |
+| Streaming (SSE, LLM output) | Not covered; hand-roll `fetch` + a reader | `useStream`, sharing the same auth and refresh |
+
+Nothing is hidden: every TanStack Query option (`staleTime`, `enabled`, `select`, …) and every Axios option (`headers`, `timeout`, …) still works on the same hook, and `useQueryClient`, devtools and `invalidateQueries` work as usual.
+
+**When you don't need it:** if your backend has an OpenAPI spec, a code generator such as Orval may suit you better. If you only call one or two endpoints, plain TanStack Query is fine.
+
 ### Claude Code Skill
 
 Get AI-assisted setup, typed hooks, auth interceptors, and streaming — directly in your editor:
