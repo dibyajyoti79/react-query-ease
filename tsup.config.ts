@@ -12,7 +12,8 @@ export default defineConfig({
   treeshake: true,
   outExtension({ format }) {
     return {
-      js: format === "esm" ? ".esm.js" : ".js",
+      // .mjs so Node's ESM loader treats the file as ESM without "type": "module"
+      js: format === "esm" ? ".mjs" : ".js",
     };
   },
 });
