@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/react-query-ease)](https://bundlephobia.com/package/react-query-ease)
 [![types](https://img.shields.io/npm/types/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
-[![license](https://img.shields.io/npm/l/react-query-ease.svg)](https://www.npmjs.com/package/react-query-ease)
+[![license](https://img.shields.io/npm/l/react-query-ease.svg)](./LICENSE)
 
 **Typed Axios + TanStack React Query API clients in a few lines.** Create one client per service, then call `api.useQuery` / `api.useMutation` with no repeated Axios boilerplate, query functions, or manual cache invalidation.
 
