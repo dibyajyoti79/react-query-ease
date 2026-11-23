@@ -1,5 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+} from "react";
 import { StreamConfig, StreamController } from "./createStream";
+
+// useLayoutEffect warns during SSR on older React versions, so fall back to
+// useEffect on the server.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export type UseStreamOptions = Omit<StreamConfig, "url" | "onChunk" | "onComplete" | "onError"> & {
   url: string;
@@ -30,7 +41,9 @@ export const useStream = <TVariables = unknown>(
   // Latest config, read when start() runs. This keeps `start` stable even
   // when the config is an inline object that changes on every render.
   const configRef = useRef(defaultConfig);
-  configRef.current = defaultConfig;
+  useIsomorphicLayoutEffect(() => {
+    configRef.current = defaultConfig;
+  });
 
   // Each start() call is a "run". Callbacks from an older run are ignored, so
   // a stream that was replaced can't overwrite the state of the new one.

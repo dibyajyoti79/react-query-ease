@@ -95,7 +95,7 @@ const createRequestHelpers = (instance: AxiosInstance) => {
     (method: Method) =>
     <T>(url: string, config?: AxiosRequestConfig): Promise<T> =>
       request<T>({
-        ...(config ?? {}),
+        ...config,
         url,
         method,
       });
@@ -131,10 +131,10 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
       key,
       paramsInKey = clientParamsInKey,
       axios: axiosOverrides,
-      ...options
+      ...rest
     } = args;
     const { axiosConfig: requestConfig, reactQueryOptions } =
-      splitOptions(options);
+      splitOptions(rest);
     const { method = "GET", ...requestRest } = requestConfig;
 
     const baseKey = normalizeKey(key);
@@ -176,10 +176,10 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
       body,
       axios: axiosOverrides,
       onSuccess,
-      ...options
+      ...rest
     } = args;
     const { axiosConfig: requestConfig, reactQueryOptions } =
-      splitOptions(options);
+      splitOptions(rest);
     const { method = "POST", ...requestRest } = requestConfig;
     const keysToInvalidate = toInvalidateKeyArray(keyToInvalidate);
 

@@ -1,4 +1,4 @@
-import { AxiosInstance, AxiosError, Method } from "axios";
+import { AxiosInstance, AxiosError, InternalAxiosRequestConfig, Method } from "axios";
 import { AuthInterceptorOptions, RefreshResult } from "./interceptors/createAuthInterceptor";
 import { getAuthState } from "./internal/authRegistry";
 
@@ -120,7 +120,7 @@ export const createStream = async (
     isDone = true;
     while (pendingQueue.length > 0) {
       const { resolve } = pendingQueue.shift()!;
-      resolve({ value: undefined as any, done: true });
+      resolve({ value: undefined, done: true });
     }
   };
 
@@ -223,7 +223,9 @@ export const createStream = async (
       } = authOptions;
 
       const skipAuth = shouldSkipAuth
-        ? await shouldSkipAuth(mockAxiosConfig as any)
+        ? await shouldSkipAuth(
+            mockAxiosConfig as unknown as InternalAxiosRequestConfig
+          )
         : false;
 
       if (!skipAuth) {
@@ -257,18 +259,15 @@ export const createStream = async (
 
         const shouldRefresh = authOptions.shouldRefresh ?? defaultShouldRefresh;
         if (shouldRefresh(mockError)) {
-          try {
-            await queueRefresh(mockError);
-            return executeFetch(true);
-          } catch (refreshErr) {
-            throw refreshErr;
-          }
+          await queueRefresh(mockError);
+          return executeFetch(true);
         }
       }
 
-      const err = new Error(`Request failed with status ${response.status}`);
-      (err as any).response = response;
-      throw err;
+      throw Object.assign(
+        new Error(`Request failed with status ${response.status}`),
+        { response }
+      );
     }
 
     return response;
@@ -319,7 +318,9 @@ export const createStream = async (
         if (
           (err instanceof DOMException && err.name === "AbortError") ||
           (err instanceof Error && err.name === "AbortError") ||
-          (err && (err as any).name === "AbortError")
+          (!!err &&
+            typeof err === "object" &&
+            (err as { name?: unknown }).name === "AbortError")
         ) {
           pushComplete();
           return;
@@ -354,7 +355,7 @@ export const createStream = async (
               throw streamError;
             }
             if (isDone) {
-              return { value: undefined as any, done: true };
+              return { value: undefined, done: true };
             }
             return new Promise<IteratorResult<string>>((resolve, reject) => {
               pendingQueue.push({ resolve, reject });
@@ -362,7 +363,7 @@ export const createStream = async (
           },
           async return(): Promise<IteratorResult<string>> {
             handleAbort();
-            return { value: undefined as any, done: true };
+            return { value: undefined, done: true };
           },
         };
       },
