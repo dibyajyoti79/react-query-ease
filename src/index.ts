@@ -1,14 +1,12 @@
 export {
   createApiClient,
   type ApiClientOptions,
-  type SimpleApiClient,
   type RequestMethod,
   type BodyRequestMethod,
   type ApiQueryArgs,
   type ApiQueryOptions,
   type ApiMutationArgs,
   type InvalidateKeys,
-  type DefaultError,
 } from "./createApiClient";
 export {
   createAuthInterceptor,
