@@ -1,7 +1,7 @@
 import type { AxiosRequestConfig } from "axios";
 
 /**
- * Option names that belong to React Query (v4 + v5) and must never be sent
+ * Option names that belong to React Query v5 and must never be sent
  * to Axios. Anything not listed here is forwarded to Axios, which keeps
  * unknown/custom Axios keys working exactly as before.
  */
@@ -14,7 +14,6 @@ const REACT_QUERY_KEYS = new Set<string>([
   "enabled",
   "staleTime",
   "gcTime",
-  "cacheTime",
   "retry",
   "retryDelay",
   "retryOnMount",
@@ -31,20 +30,15 @@ const REACT_QUERY_KEYS = new Set<string>([
   "meta",
   "structuralSharing",
   "throwOnError",
-  "useErrorBoundary",
   "notifyOnChangeProps",
   "behavior",
   "persister",
   "subscribed",
-  "suspense",
-  "keepPreviousData",
-  "isDataEqual",
-  "context",
   "maxPages",
   "experimental_prefetchInRender",
   "_defaulted",
   "_optimisticResults",
-  // mutations + v4 query callbacks
+  // mutations
   "mutationKey",
   "mutationFn",
   "onMutate",

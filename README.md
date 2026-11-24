@@ -121,6 +121,8 @@ The skill runs on its own when you ask your agent about data fetching, React Que
 npm install react-query-ease axios @tanstack/react-query
 ```
 
+Requires `@tanstack/react-query` 5, `axios` 1.21.1 or later and React 18 or later.
+
 ### Quick example
 
 ```tsx
@@ -213,7 +215,7 @@ await queryClient.prefetchQuery(todoQuery(1));          // prefetch / Next.js SS
 const todo = await queryClient.ensureQueryData(todoQuery(1));
 queryClient.setQueryData(todoQuery(1).queryKey, updated);
 
-const { data } = useSuspenseQuery(todoQuery(1));       // v5
+const { data } = useSuspenseQuery(todoQuery(1));
 const results = useQueries({ queries: ids.map(todoQuery) });
 ```
 
@@ -254,7 +256,7 @@ api.useMutation<Todo, AxiosError, UpdateInput>({
 ### Types
 
 - **`select` can change the data's shape.** The third generic is the selected type: `api.useQuery<Todo[], AxiosError, number>({ ..., select: (todos) => todos.length })`. Without explicit generics it's inferred from `select`: `select: (todos: Todo[]) => todos.map((t) => t.title)` gives `data: string[] | undefined`.
-- **The error type follows React Query's default.** With TanStack Query v5, register your error type once and every hook uses it:
+- **The error type follows React Query's default.** Register your error type once and every hook uses it:
 
 ```ts
 declare module "@tanstack/react-query" {
@@ -351,4 +353,24 @@ A pending refresh is rejected after `refreshTimeoutMs` (default `30000`; `0` dis
 | `skipAuth` | any request, `stream()` | `false` | Skips the auth interceptor: no token is attached and a 401 doesn't trigger a refresh. |
 | `refreshTimeoutMs` | `createAuthInterceptor` | `30000` | Rejects a refresh that takes longer than this. |
 
-Upgrading from 0.3.x? See the [changelog](CHANGELOG.md) for the two behaviour changes and their opt-outs.
+### Migrating to 1.0
+
+1.0 is the first stable release. Full notes, with the reasons for each change, are in the [changelog](CHANGELOG.md#100).
+
+**Breaking changes**
+
+| Change | What to do |
+|---|---|
+| TanStack Query v4 is no longer supported (peer range is now `^5.0.0`) | Upgrade to v5 first with TanStack's [migration guide](https://tanstack.com/query/latest/docs/framework/react/guides/migrating-to-v5) and codemod. |
+| React 18+ is required | Upgrade React (TanStack Query v5 requires it). |
+| axios is a peer dependency (`^1.21.1`) | npm 7+ installs it for you. With pnpm or yarn: `pnpm add axios` / `yarn add axios`. If your app has an older axios, upgrade it: every version before 1.20.0 has security advisories. |
+| `error` is typed with React Query's default error (`Error`, or your registered `defaultError`) instead of `unknown` | Register `AxiosError` (see [Types](#types)), or pass `unknown` as the second generic. |
+| A failed stream rejects with an `AxiosError` instead of a fetch `Response` error | Read the body from `error.response.data`; `error.response.status` works as before. |
+| Streams go through the Axios instance and its interceptors | To skip an interceptor for streams, check `config.responseType === "stream"`. |
+| v4 option names (`cacheTime`, `useErrorBoundary`, `keepPreviousData`, `isDataEqual`, `suspense`) are sent to Axios | Use `gcTime`, `throwOnError`, `placeholderData: keepPreviousData`, `structuralSharing`, `useSuspenseQuery`. They already did nothing on v5. |
+| Private `instance.__authOptions` / `__queueRefresh` are gone | Keep your own reference to the auth interceptor options. |
+| `SimpleApiClient` type removed | Use `ReturnType<typeof createApiClient>`. |
+
+**New in 1.0 (no changes needed):** `api.queryOptions()` for prefetching, SSR and Suspense; `keyToInvalidate` as a function; `select` that can change the data's type; a fix for a stale 401 starting a second token refresh.
+
+Upgrading from 0.3.x? Also read the [0.5.0 notes](CHANGELOG.md#050) for the two behaviour changes and their opt-outs.

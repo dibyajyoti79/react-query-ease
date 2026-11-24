@@ -18,14 +18,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Latest
           - react-query: 5
             react: 19
-          - react-query: 4
+          # Oldest versions allowed by the peer dependency ranges
+          - react-query: 5.0.0
             react: 18
-          # Oldest axios allowed by the peer dependency range
-          - react-query: 5
-            react: 19
-            axios: 1.8.2
+            axios: 1.21.1
     name: react-query v${{ matrix.react-query }} / react ${{ matrix.react }}${{ matrix.axios && format(' / axios {0}', matrix.axios) || '' }}
     steps:
       - uses: actions/checkout@v4
@@ -46,8 +45,5 @@ jobs:
 
       - run: npm run lint
       - run: npm run typecheck
-      # Register, initialPageParam, throwOnError: v5-only type checks
-      - if: matrix.react-query == 5
-        run: npm run typecheck:v5
       - run: npm test
       - run: npm run build

@@ -1,5 +1,4 @@
 import { AxiosInstance, AxiosError, Method } from "axios";
-import { AuthInterceptorOptions, RefreshResult } from "./interceptors/createAuthInterceptor";
 
 export type StreamConfig = {
   url: string;
@@ -21,12 +20,6 @@ export type StreamController = {
   readonly signal: AbortSignal;
 
   [Symbol.asyncIterator](): AsyncIterator<string>;
-};
-
-/** @deprecated Internal shape; auth state now lives in a private registry. */
-export type ExtendedAxiosInstance = AxiosInstance & {
-  __authOptions?: AuthInterceptorOptions;
-  __queueRefresh?: (error: AxiosError) => Promise<RefreshResult>;
 };
 
 /** Maps fetch's `credentials` to the value Axios' fetch adapter passes through. */

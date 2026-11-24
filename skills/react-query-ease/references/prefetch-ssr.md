@@ -71,7 +71,7 @@ Router loaders (TanStack Router, React Router):
 loader: ({ params }) => queryClient.ensureQueryData(todoQuery(Number(params.id)))
 ```
 
-## Suspense (v5)
+## Suspense
 
 ```tsx
 "use client";

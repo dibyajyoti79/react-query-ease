@@ -1,10 +1,10 @@
-import axios, { AxiosInstance, AxiosRequestConfig, Method } from "axios";
+import { AxiosInstance, AxiosRequestConfig, Method, create } from "axios";
 import {
+  DefaultError,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
   UseQueryOptions,
-  UseQueryResult,
   useMutation,
   useQuery,
   useQueryClient,
@@ -24,13 +24,6 @@ const toKeyPart = (params: unknown): unknown =>
     : params;
 
 const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
-
-/**
- * React Query's default error type. In v5 this is `Register["defaultError"]`
- * (`Error` unless you register your own, e.g. `AxiosError`); in v4 it is
- * `unknown`. Read off `UseQueryResult` so it works with both versions.
- */
-export type DefaultError = Exclude<UseQueryResult["error"], null>;
 
 type QueryOptions<TData, TError, TSelected = TData> = Omit<
   UseQueryOptions<TData, TError, TSelected, QueryKey>,
@@ -136,7 +129,6 @@ export type BodyRequestMethod = {
   ): Promise<T>;
 };
 
-export type SimpleApiClient = ReturnType<typeof createApiClient>;
 
 const createRequestHelpers = (instance: AxiosInstance) => {
   const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
@@ -189,7 +181,7 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     cancelable = true,
     ...axiosConfig
   } = options;
-  const instance = axios.create(axiosConfig);
+  const instance = create(axiosConfig);
   if (configure) {
     configure(instance);
   }
@@ -294,8 +286,8 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
 
         return request<TData>({ ...finalConfig, ...axiosOverrides });
       },
-      // Forward every callback argument as-is so this works with the
-      // 3-argument (v4) and 4-argument (v5) onSuccess signatures.
+      // Forward every callback argument as-is: the arguments after
+      // (data, variables) differ between v5 minor versions.
       onSuccess: (async (...callbackArgs: unknown[]) => {
         if (onSuccess) {
           await (onSuccess as (...a: unknown[]) => unknown)(...callbackArgs);

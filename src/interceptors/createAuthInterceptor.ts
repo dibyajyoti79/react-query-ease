@@ -197,7 +197,7 @@ export const createAuthInterceptor =
 
     instance.interceptors.request.use(attachAccessToken);
 
-    registerAuth(instance, { options, queueRefresh });
+    registerAuth(instance);
 
     instance.interceptors.response.use(
       (response) => response,
