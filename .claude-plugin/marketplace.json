@@ -1,0 +1,13 @@
+{
+  "name": "react-query-ease",
+  "owner": {
+    "name": "Ashutosh Dash"
+  },
+  "plugins": [
+    {
+      "name": "react-query-ease",
+      "source": "./",
+      "description": "Set up react-query-ease: typed Axios + React Query clients, hooks, auth token refresh and streaming."
+    }
+  ]
+}

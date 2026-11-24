@@ -1,5 +1,6 @@
-import { AxiosInstance, AxiosError, Method } from "axios";
+import { AxiosInstance, AxiosError, InternalAxiosRequestConfig, Method } from "axios";
 import { AuthInterceptorOptions, RefreshResult } from "./interceptors/createAuthInterceptor";
+import { getAuthState } from "./internal/authRegistry";
 
 export type StreamConfig = {
   url: string;
@@ -8,6 +9,8 @@ export type StreamConfig = {
   data?: unknown;
   signal?: AbortSignal;
   credentials?: RequestCredentials;
+  /** Skip the auth interceptor: no token is attached and a 401 is not refreshed. */
+  skipAuth?: boolean;
 
   onChunk?: (chunk: string) => void;
   onComplete?: () => void;
@@ -21,6 +24,7 @@ export type StreamController = {
   [Symbol.asyncIterator](): AsyncIterator<string>;
 };
 
+/** @deprecated Internal shape; auth state now lives in a private registry. */
 export type ExtendedAxiosInstance = AxiosInstance & {
   __authOptions?: AuthInterceptorOptions;
   __queueRefresh?: (error: AxiosError) => Promise<RefreshResult>;
@@ -116,7 +120,7 @@ export const createStream = async (
     isDone = true;
     while (pendingQueue.length > 0) {
       const { resolve } = pendingQueue.shift()!;
-      resolve({ value: undefined as any, done: true });
+      resolve({ value: undefined, done: true });
     }
   };
 
@@ -200,9 +204,9 @@ export const createStream = async (
       }
     }
 
-    const authInstance = instance as ExtendedAxiosInstance;
-    const authOptions = authInstance.__authOptions;
-    const queueRefresh = authInstance.__queueRefresh;
+    const authState = config.skipAuth ? undefined : getAuthState(instance);
+    const authOptions = authState?.options;
+    const queueRefresh = authState?.queueRefresh;
 
     const mockAxiosConfig = {
       url: config.url,
@@ -219,7 +223,9 @@ export const createStream = async (
       } = authOptions;
 
       const skipAuth = shouldSkipAuth
-        ? await shouldSkipAuth(mockAxiosConfig as any)
+        ? await shouldSkipAuth(
+            mockAxiosConfig as unknown as InternalAxiosRequestConfig
+          )
         : false;
 
       if (!skipAuth) {
@@ -253,18 +259,15 @@ export const createStream = async (
 
         const shouldRefresh = authOptions.shouldRefresh ?? defaultShouldRefresh;
         if (shouldRefresh(mockError)) {
-          try {
-            await queueRefresh(mockError);
-            return executeFetch(true);
-          } catch (refreshErr) {
-            throw refreshErr;
-          }
+          await queueRefresh(mockError);
+          return executeFetch(true);
         }
       }
 
-      const err = new Error(`Request failed with status ${response.status}`);
-      (err as any).response = response;
-      throw err;
+      throw Object.assign(
+        new Error(`Request failed with status ${response.status}`),
+        { response }
+      );
     }
 
     return response;
@@ -315,7 +318,9 @@ export const createStream = async (
         if (
           (err instanceof DOMException && err.name === "AbortError") ||
           (err instanceof Error && err.name === "AbortError") ||
-          (err && (err as any).name === "AbortError")
+          (!!err &&
+            typeof err === "object" &&
+            (err as { name?: unknown }).name === "AbortError")
         ) {
           pushComplete();
           return;
@@ -350,7 +355,7 @@ export const createStream = async (
               throw streamError;
             }
             if (isDone) {
-              return { value: undefined as any, done: true };
+              return { value: undefined, done: true };
             }
             return new Promise<IteratorResult<string>>((resolve, reject) => {
               pendingQueue.push({ resolve, reject });
@@ -358,7 +363,7 @@ export const createStream = async (
           },
           async return(): Promise<IteratorResult<string>> {
             handleAbort();
-            return { value: undefined as any, done: true };
+            return { value: undefined, done: true };
           },
         };
       },

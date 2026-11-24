@@ -55,8 +55,8 @@ export const useSearchTodos = (filters: TodoSearchFilters) => {
   const query = todosApi.useQuery<Todo[]>({
     url: "/todos/search",
     method: "GET",
-    key: ["todos", "search", filters.query],
-    params: { q: filters.query },
+    key: ["todos", "search"],
+    params: { q: filters.query }, // added to the key: ["todos", "search", { q }]
   });
 
   return {
@@ -110,6 +110,7 @@ export const useDeleteTodo = () => {
   >({
     url: (variables) => `/todos/${variables.id}`,
     method: "DELETE",
+    body: () => undefined, // the id is in the URL; don't also send it as a body
     keyToInvalidate: ["todos"],
   });
 

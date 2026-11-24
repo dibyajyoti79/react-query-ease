@@ -11,6 +11,7 @@ The package ships with a built-in `createAuthInterceptor` utility that handles:
 2. Intercepting `401 Unauthorized` errors.
 3. Coalescing concurrent 401s into a single token refresh promise (preventing multiple duplicate token refreshes).
 4. Retrying all queued pending requests once the token is successfully refreshed.
+5. Timing out a refresh that never finishes (`refreshTimeoutMs`, default 30 s), so requests fail instead of hanging.
 
 Here is a complete, production-ready setup:
 
@@ -56,24 +57,21 @@ const authInterceptor = createAuthInterceptor({
   getRefreshToken: () => tokens.refreshToken,
   
   // 3. Define the async token refresh routine
-  refreshTokens: async ({ refreshToken, error }) => {
-    try {
-      // Use raw Axios or Fetch to avoid recursion through the main client
-      const response = await axios.post<{
-        accessToken: string;
-        refreshToken: string;
-      }>("https://auth.example.com/oauth/refresh", {
-        refresh_token: refreshToken,
-      });
+  refreshTokens: async ({ refreshToken }) => {
+    // A separate Axios call. To use the main client instead, see
+    // "Refreshing through the same client" below. Errors thrown here reach
+    // onRefreshFailure.
+    const response = await axios.post<{
+      accessToken: string;
+      refreshToken: string;
+    }>("https://auth.example.com/oauth/refresh", {
+      refresh_token: refreshToken,
+    });
 
-      const data = response.data;
-      saveTokens(data.accessToken, data.refreshToken);
+    const data = response.data;
+    saveTokens(data.accessToken, data.refreshToken);
 
-      return data; // Must return { accessToken, refreshToken }
-    } catch (refreshError) {
-      // Propagation of error to the failure callback
-      throw refreshError;
-    }
+    return data; // Must return { accessToken, refreshToken }
   },
 
   // 4. Token header details
@@ -113,6 +111,33 @@ export const secureApi = createApiClient({
 });
 ```
 
+### Refreshing through the same client
+
+You don't need a separate Axios instance for the refresh call. Mark that one request with `skipAuth: true` so it skips the interceptor. Without it, a 401 from the refresh endpoint would wait on the refresh that is already running.
+
+```typescript
+let api: ReturnType<typeof createApiClient>;
+
+api = createApiClient({
+  baseURL: "https://api.example.com/v1",
+  configure: createAuthInterceptor({
+    getAccessToken: () => tokens.accessToken,
+    getRefreshToken: () => tokens.refreshToken,
+    refreshTokens: ({ refreshToken }) =>
+      api.post<{ accessToken: string; refreshToken: string }>(
+        "/oauth/refresh",
+        { refresh_token: refreshToken },
+        { skipAuth: true }
+      ),
+    setTokens: ({ accessToken, refreshToken }) => saveTokens(accessToken, refreshToken),
+  }),
+});
+```
+
+`skipAuth: true` works on any request, including `api.stream()` and `useStream`, whenever you want to send a request without the token. To skip whole groups of endpoints, use `shouldSkipAuth`.
+
+As a safety net, a refresh that never settles is rejected after `refreshTimeoutMs` (default `30000`, `0` disables it). The waiting requests then fail and `onRefreshFailure` runs, instead of everything hanging.
+
 ---
 
 ## 2. Chaining Multiple Custom Interceptors
@@ -125,11 +150,12 @@ In production, you often need to perform tasks like:
 You can chain interceptors inside the `configure` callback function:
 
 ```typescript
+import type { AxiosInstance } from "axios";
 import { createApiClient } from "react-query-ease";
 
 // Interceptor 1: Appends tracing and tenant headers
-const headerInterceptor = (instance: any) => {
-  instance.interceptors.request.use((config: any) => {
+const headerInterceptor = (instance: AxiosInstance) => {
+  instance.interceptors.request.use((config) => {
     config.headers["X-Correlation-ID"] = crypto.randomUUID();
     config.headers["X-Tenant-ID"] = "tenant_12345";
     return config;
@@ -137,16 +163,16 @@ const headerInterceptor = (instance: any) => {
 };
 
 // Interceptor 2: Debug log logger
-const loggingInterceptor = (instance: any) => {
-  instance.interceptors.request.use((config: any) => {
+const loggingInterceptor = (instance: AxiosInstance) => {
+  instance.interceptors.request.use((config) => {
     console.log(`[API Request] [${config.method?.toUpperCase()}] ${config.url}`);
     return config;
-  }, (error: any) => Promise.reject(error));
+  }, (error) => Promise.reject(error));
 
-  instance.interceptors.response.use((response: any) => {
+  instance.interceptors.response.use((response) => {
     console.log(`[API Response] Success [${response.status}] from ${response.config.url}`);
     return response;
-  }, (error: any) => {
+  }, (error) => {
     console.error(`[API Error] [${error.response?.status || "Network Error"}] on ${error.config?.url}`);
     return Promise.reject(error);
   });
@@ -167,3 +193,5 @@ export const client = createApiClient({
   },
 });
 ```
+
+> Apply `createAuthInterceptor` to an instance only once. A second registration on the same instance is ignored, and a warning is logged in development.

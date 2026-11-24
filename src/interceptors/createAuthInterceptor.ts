@@ -4,6 +4,18 @@ import {
   AxiosInstance,
   InternalAxiosRequestConfig,
 } from "axios";
+import { registerAuth, hasAuth } from "../internal/authRegistry";
+import { devWarnOnce } from "../internal/devWarn";
+
+declare module "axios" {
+  interface AxiosRequestConfig {
+    /**
+     * Skip the auth interceptor for this request: no token is attached and a
+     * 401 will not trigger a refresh. Use it for the refresh call itself.
+     */
+    skipAuth?: boolean;
+  }
+}
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -62,6 +74,36 @@ export type AuthInterceptorOptions<
   shouldRefresh?: (error: AxiosError) => boolean;
   onRefreshSuccess?: (tokens: TResult) => MaybePromise<void>;
   onRefreshFailure?: (error: unknown) => MaybePromise<void>;
+  /**
+   * Reject a pending refresh after this many milliseconds, so requests
+   * waiting on it fail instead of hanging. Set to `0` to disable.
+   * Default: `30000`.
+   */
+  refreshTimeoutMs?: number;
+};
+
+const DEFAULT_REFRESH_TIMEOUT_MS = 30_000;
+
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  if (!(ms > 0)) return promise;
+
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(`Auth interceptor: token refresh timed out after ${ms}ms`)
+      );
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 };
 
 export const createAuthInterceptor =
@@ -69,6 +111,14 @@ export const createAuthInterceptor =
     options: AuthInterceptorOptions<TResult>
   ) =>
   (instance: AxiosInstance) => {
+    if (hasAuth(instance)) {
+      devWarnOnce(
+        "auth-registered-twice",
+        "createAuthInterceptor was applied to the same Axios instance more than once. The extra registration is ignored."
+      );
+      return;
+    }
+
     const {
       getAccessToken,
       getRefreshToken,
@@ -80,14 +130,18 @@ export const createAuthInterceptor =
       shouldRefresh = defaultShouldRefresh,
       onRefreshSuccess,
       onRefreshFailure,
+      refreshTimeoutMs = DEFAULT_REFRESH_TIMEOUT_MS,
     } = options;
+
+    const isAuthSkipped = (config: InternalAxiosRequestConfig) =>
+      config.skipAuth === true || !!shouldSkipAuth?.(config);
 
     let refreshPromise: Promise<TResult> | null = null;
 
     const attachAccessToken = async (
       config: InternalAxiosRequestConfig
     ): Promise<InternalAxiosRequestConfig> => {
-      if (shouldSkipAuth?.(config)) {
+      if (isAuthSkipped(config)) {
         return config;
       }
 
@@ -112,7 +166,10 @@ export const createAuthInterceptor =
             refreshToken: refreshToken ?? null,
             error,
           };
-          const result = await refreshTokens(context);
+          const result = await withTimeout(
+            refreshTokens(context),
+            refreshTimeoutMs
+          );
           if (!result?.accessToken) {
             throw new Error(
               "Auth interceptor: refreshTokens resolved without an access token"
@@ -137,8 +194,7 @@ export const createAuthInterceptor =
 
     instance.interceptors.request.use(attachAccessToken);
 
-    (instance as any).__authOptions = options;
-    (instance as any).__queueRefresh = queueRefresh;
+    registerAuth(instance, { options, queueRefresh });
 
     instance.interceptors.response.use(
       (response) => response,
@@ -148,7 +204,7 @@ export const createAuthInterceptor =
         if (
           !config ||
           config.__isRetryRequest ||
-          shouldSkipAuth?.(config) ||
+          isAuthSkipped(config) ||
           !shouldRefresh(error)
         ) {
           throw error;

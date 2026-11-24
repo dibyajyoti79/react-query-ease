@@ -59,8 +59,8 @@ export const useTodos = () => {
 export const useSearchTodos = (filters: TodoSearchFilters) => {
   const query = todosApi.useQuery<Todo[]>({
     url: "/todos/search",
-    key: ["todos", "search", filters.query],
-    params: { q: filters.query },
+    key: ["todos", "search"],
+    params: { q: filters.query }, // added to the key: ["todos", "search", { q }]
     enabled: filters.query.length > 0,
   });
   return {
@@ -104,6 +104,7 @@ export const useDeleteTodo = () => {
   >({
     url: (variables) => `/todos/${variables.id}`,
     method: "DELETE",
+    body: () => undefined, // the id is in the URL; don't also send it as a body
     keyToInvalidate: ["todos"],
   });
   return { deleteTodo: mutate, isDeletingTodo: isPending, ...rest };
@@ -189,6 +190,7 @@ export function Todos() {
 - **Clients in `config/`** — one file per service, export named clients
 - **Hooks in `hooks/`** — rename mutation/query values to domain names (`createTodo` not `mutate`)
 - **Components only import hooks** — never import clients directly in components
-- **`keyToInvalidate`** — use the same key string you pass to `useQuery`'s `key`
+- **`keyToInvalidate`** — use the same key you pass to `useQuery`'s `key`. It matches by prefix, so `["todos"]` also refreshes `["todos", "search", { q }]`
+- **`params` are part of the cache key** — don't repeat them in `key`; each set of params gets its own cache entry
 - **Dynamic URLs** — pass `(variables) => string` function when URL contains variable segments
 - **TypeScript generics** — `useMutation<TData, TError, TVariables>` gives full type safety on `mutate` call sites

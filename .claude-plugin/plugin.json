@@ -1,0 +1,11 @@
+{
+  "name": "react-query-ease",
+  "description": "Claude Code skill for setting up react-query-ease: typed Axios + TanStack React Query clients, useQuery/useMutation hooks, auto cache invalidation, auth token refresh and streaming (SSE/LLM) hooks.",
+  "author": {
+    "name": "Ashutosh Dash"
+  },
+  "homepage": "https://github.com/dibyajyoti79/react-query-ease",
+  "repository": "https://github.com/dibyajyoti79/react-query-ease",
+  "license": "MIT",
+  "keywords": ["react", "react-query", "tanstack-query", "axios", "nextjs", "api-client", "streaming"]
+}

@@ -1,0 +1,50 @@
+name: CI
+
+# Runs only for pull requests (opened, reopened, or new commits pushed to
+# the PR branch). Plain pushes to a branch without a PR don't trigger it.
+on:
+  pull_request:
+  workflow_dispatch: # manual "Run workflow" button in the Actions tab
+
+# Cancel an in-progress run when a newer commit arrives on the same PR.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - react-query: 5
+            react: 19
+          - react-query: 4
+            react: 18
+          # Oldest axios allowed by the dependency range
+          - react-query: 5
+            react: 19
+            axios: 1.3.0
+    name: react-query v${{ matrix.react-query }} / react ${{ matrix.react }}${{ matrix.axios && format(' / axios {0}', matrix.axios) || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install the versions under test
+        run: >
+          npm install --no-save --legacy-peer-deps
+          @tanstack/react-query@${{ matrix.react-query }}
+          react@${{ matrix.react }} react-dom@${{ matrix.react }}
+          ${{ matrix.axios && format('axios@{0}', matrix.axios) || '' }}
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

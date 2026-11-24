@@ -16,6 +16,9 @@ const result = api.useStream<TVariables = void>(config: UseStreamOptions);
 | `method` | `string` | No | HTTP method (default: `"GET"`) |
 | `headers` | `Record<string, string>` | No | Custom headers for the fetch request |
 | `credentials` | `RequestCredentials` | No | CORS credentials (`omit`, `same-origin`, `include`) |
+| `data` | `unknown` | No | Default request body; a value passed to `start(variables)` replaces it |
+| `signal` | `AbortSignal` | No | Your own abort signal; aborting it stops the stream |
+| `skipAuth` | `boolean` | No | Skip the auth interceptor (no token, no refresh on 401) |
 | `onChunk` | `(chunk: string) => void` | No | Called for each received text fragment |
 | `onComplete` | `() => void` | No | Called when stream terminates successfully |
 | `onError` | `(error: unknown) => void` | No | Called on connection/network error |
@@ -25,11 +28,11 @@ const result = api.useStream<TVariables = void>(config: UseStreamOptions);
 | Value | Type | Description |
 |-------|------|-------------|
 | `data` | `string` | Accumulated text from all chunks received so far |
-| `isLoading` | `boolean` | `true` while connecting or while auth interceptor checks/refreshes tokens |
-| `isStreaming` | `boolean` | `true` while bytes are actively being received |
+| `isStreaming` | `boolean` | `true` from `start()` until the stream completes, fails or is aborted |
+| `isLoading` | `boolean` | Currently always equal to `isStreaming`. For a "connecting" state use `isStreaming && !data` |
 | `error` | `unknown \| null` | Connection error state — **not set on user-initiated abort** |
-| `start` | `(variables?: TVariables) => Promise<StreamController>` | Launch the stream; `variables` map to request body |
-| `abort` | `() => void` | Cancel active stream, release reader lock, clear loading flags |
+| `start` | `(variables?: TVariables) => Promise<StreamController>` | Launch the stream; `variables` become the body. Same function on every render, and it reads the latest config. Calling it again aborts the running stream, whose late callbacks are ignored. Rejects with `AbortError` if aborted while connecting |
+| `abort` | `() => void` | Cancel the stream (also while still connecting) and reset flags; never sets `error` |
 
 ## Production Example — AI Chat
 
@@ -81,7 +84,7 @@ export function AIAssistant() {
         )}
       </form>
 
-      {isLoading && <p>Connecting...</p>}
+      {isStreaming && !data && <p>Connecting...</p>}
       {error && <p style={{ color: "red" }}>{String(error)}</p>}
       <pre style={{ whiteSpace: "pre-wrap" }}>{data}</pre>
     </div>
@@ -125,7 +128,9 @@ If the client uses `createAuthInterceptor`, `useStream` participates in the same
 
 ## Safe Cleanup
 
-On component unmount mid-stream:
-1. Active fetch connection is aborted via `AbortController`
-2. `ReadableStream` reader lock is released and cancelled
-3. Pending state updates are dropped (no React "update on unmounted component" warnings)
+On component unmount, whether still connecting or mid-stream:
+1. The fetch is aborted via `AbortController`
+2. The `ReadableStream` reader is cancelled and released
+3. Later callbacks are ignored, so no state updates happen after unmount
+
+Calling `start()` again gets the same treatment: the previous stream is aborted and its leftovers are ignored.

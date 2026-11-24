@@ -2,6 +2,8 @@
 
 Update the cache immediately on mutate; roll back on error.
 
+> **Cache keys and `params`:** `useQuery` adds `params` to the key. These examples assume the list query is `{ key: ["todos"] }` with no params, so its key is exactly `["todos"]`. If the list query has params, for example `{ key: ["todos"], params: { page } }`, its key is `["todos", { page }]`. In that case, either pass that full key to `getQueryData` and `setQueryData`, or use `queryClient.setQueriesData({ queryKey: ["todos"] }, updater)` to update every matching list. `cancelQueries` and `invalidateQueries` already match by prefix.
+
 ## Toggle (single item update)
 
 ```ts
@@ -134,3 +136,4 @@ export const useCreateTodo = () => {
 - Always snapshot before update — `getQueryData` before `setQueryData`
 - Return snapshot from `onMutate` — React Query passes it as `context` to `onError`/`onSettled`
 - Always `invalidateQueries` in `onSettled` — syncs temp state with real server data
+- Match the exact key — `getQueryData` and `setQueryData` need the full key, including `params` if the query has any

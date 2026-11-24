@@ -16,6 +16,9 @@ Built-in utility that wires up Bearer token auth on every request, coalesces con
 | `shouldRefresh` | `(error) => boolean` | No | Trigger refresh on this error (default: 401) |
 | `onRefreshSuccess` | `(tokens) => void \| Promise<void>` | No | Hook after successful refresh |
 | `onRefreshFailure` | `(error) => void \| Promise<void>` | No | Hook after failed refresh (use for logout) |
+| `refreshTimeoutMs` | `number` | No | Reject a refresh that takes longer than this (default: `30000`; `0` disables) |
+
+**Per request:** pass `skipAuth: true` in any request config, including `api.stream()` and `useStream`, to send it without the token and without refresh-on-401.
 
 ## Production Setup
 
@@ -53,8 +56,9 @@ const authInterceptor = createAuthInterceptor({
   getAccessToken: () => tokens.accessToken,
   getRefreshToken: () => tokens.refreshToken,
 
-  refreshTokens: async ({ refreshToken, error }) => {
-    // Use raw axios/fetch — NOT the api client (avoids recursion)
+  refreshTokens: async ({ refreshToken }) => {
+    // Separate axios call. To use the api client, add { skipAuth: true }
+    // (see "Refreshing through the same client" below)
     const response = await axios.post<{
       accessToken: string;
       refreshToken: string;
@@ -93,32 +97,56 @@ export const api = createApiClient({
 });
 ```
 
+## Refreshing through the same client
+
+Mark the refresh request with `skipAuth: true`. Without it, a 401 from the refresh endpoint waits on the refresh already in progress (until `refreshTimeoutMs`).
+
+```typescript
+let api: ReturnType<typeof createApiClient>;
+
+api = createApiClient({
+  baseURL: "https://api.example.com/v1",
+  configure: createAuthInterceptor({
+    getAccessToken: () => tokens.accessToken,
+    getRefreshToken: () => tokens.refreshToken,
+    refreshTokens: ({ refreshToken }) =>
+      api.post<{ accessToken: string; refreshToken: string }>(
+        "/oauth/refresh",
+        { refresh_token: refreshToken },
+        { skipAuth: true }
+      ),
+    setTokens: ({ accessToken, refreshToken }) => saveTokens(accessToken, refreshToken),
+  }),
+});
+```
+
 ## Chaining Multiple Interceptors
 
 Use the `configure` callback to apply multiple interceptors in order:
 
 ```typescript
+import type { AxiosInstance } from "axios";
 import { createApiClient, createAuthInterceptor } from "react-query-ease";
 
-const headerInterceptor = (instance: any) => {
-  instance.interceptors.request.use((config: any) => {
+const headerInterceptor = (instance: AxiosInstance) => {
+  instance.interceptors.request.use((config) => {
     config.headers["X-Correlation-ID"] = crypto.randomUUID();
     config.headers["X-Tenant-ID"] = "tenant_12345";
     return config;
   });
 };
 
-const loggingInterceptor = (instance: any) => {
-  instance.interceptors.request.use((config: any) => {
+const loggingInterceptor = (instance: AxiosInstance) => {
+  instance.interceptors.request.use((config) => {
     console.log(`[REQ] ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   });
   instance.interceptors.response.use(
-    (res: any) => {
+    (res) => {
       console.log(`[RES] ${res.status} ${res.config.url}`);
       return res;
     },
-    (err: any) => {
+    (err) => {
       console.error(`[ERR] ${err.response?.status} ${err.config?.url}`);
       return Promise.reject(err);
     }
@@ -135,6 +163,8 @@ export const api = createApiClient({
 });
 ```
 
+Apply `createAuthInterceptor` once per instance. A second registration is ignored, with a dev-mode warning.
+
 ## How Concurrency Coalescing Works
 
 When multiple requests get a 401 simultaneously:
@@ -142,6 +172,6 @@ When multiple requests get a 401 simultaneously:
 1. First 401 triggers a refresh; sets an in-flight promise
 2. All subsequent 401s queue behind that same promise (no duplicate refresh calls)
 3. Once refresh resolves, all queued requests retry with the new token
-4. If refresh fails, all queued requests reject and `onRefreshFailure` fires once
+4. If refresh fails, or doesn't settle within `refreshTimeoutMs`, all queued requests reject and `onRefreshFailure` fires once
 
 This works for both Axios requests (`useQuery`/`useMutation`) and native Fetch streaming (`useStream`).

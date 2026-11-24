@@ -75,7 +75,23 @@ export const api = createApiClient({
 });
 ```
 
-`createApiClient` accepts all standard Axios config (`headers`, `timeout`, `withCredentials`, etc.) plus an optional `configure` callback for interceptors.
+`createApiClient` accepts all standard Axios config (`headers`, `timeout`, `withCredentials`, etc.) plus:
+
+- `configure` — callback for interceptors
+- `paramsInKey` (default `true`) — add `params` to query keys. `false` restores the 0.3.x keys
+- `cancelable` (default `true`) — pass React Query's `AbortSignal` to Axios, so unmounting and `cancelQueries()` abort requests. `false` restores 0.3.x behaviour
+
+## Request helpers
+
+Outside hooks, each client has `get`, `post`, `put`, `patch`, `delete` and `request`. All of them resolve to `response.data`.
+
+```ts
+await api.get("/todos", { params: { page: 2 } });
+await api.post("/todos", { title: "Buy milk" }, { timeout: 5000 }); // (url, data, config), like Axios
+await api.post("/todos", { data: { title: "Buy milk" } });          // (url, config) also works
+```
+
+With **two** arguments, the second is the **config**. `api.post("/todos", { title })` sends no body (TypeScript flags it, and a dev-mode warning is logged). Prefer the 3-argument form for `post`, `put` and `patch`.
 
 ## useQuery
 
@@ -100,7 +116,7 @@ export const useTodos = () => {
     key: ["todos"],
     // Optional:
     method: "GET", // defaults to GET
-    params: { page: 1 }, // query string params
+    params: { page: 1 }, // query string params; also added to the cache key
     staleTime: 5 * 60_000, // React Query options pass through
     enabled: true,
   });
@@ -117,8 +133,11 @@ const { todos, isLoadingTodos } = useTodos();
 **Key rules:**
 
 - `key` — React Query cache key; use arrays for namespacing
+- `params` — appended to the key, so the example above is cached as `["todos", { page: 1 }]`. Don't repeat params in `key`. Use the full key with `getQueryData`/`setQueryData`. Prefix matching (`invalidateQueries({ queryKey: ["todos"] })`, `keyToInvalidate`) still covers it. Per-query opt-out: `paramsInKey: false`
 - `url` — resolved against client `baseURL`
-- All Axios config props (`headers`, `params`, `timeout`) and React Query options (`staleTime`, `enabled`, `retry`, `select`, etc.) pass through directly
+- Axios options (`headers`, `params`, `timeout`) go to the request, and React Query options (`staleTime`, `enabled`, `retry`, `select`, etc.) go to `useQuery`; each only reaches its own side
+- `axios: { ... }` — optional Axios config merged last, for explicit overrides
+- Unmounting or `cancelQueries()` aborts the request (client option `cancelable: false` turns this off)
 
 ## useMutation
 
@@ -171,7 +190,8 @@ export const useUpdateTodo = () => {
 
 **Key rules:**
 
-- If `data` is not set, mutation variables become the request body automatically
+- If `data` is not set, mutation variables become the request body automatically (except for `GET`/`HEAD`). `DELETE` sends them too; add `body: () => undefined` when the id is only in the URL
+- `body: (variables) => ...` — build the request body yourself, e.g. `body: ({ id, ...rest }) => rest`
 - `keyToInvalidate` accepts a single key, a string, or an array of keys/strings — e.g. `keyToInvalidate: [["todos"], ["stats"]]` to bust multiple caches at once
 - All React Query mutation options (`onSuccess`, `onError`, `onSettled`, `retry`) pass through
 
@@ -223,6 +243,11 @@ export const api = createApiClient({
 
 `createAuthInterceptor` coalesces concurrent 401s into one refresh, retries queued requests with the fresh token, and covers both Axios requests and `useStream` calls.
 
+- **Refresh through the same client** with `skipAuth: true` on that request: `api.post("/auth/refresh", { refresh_token }, { skipAuth: true })`. Without it, the refresh call's own 401 waits on itself
+- `skipAuth: true` works on any request or stream that should go out without the token
+- A refresh that never settles is rejected after `refreshTimeoutMs` (default `30000`)
+- Apply the interceptor once per client; a second registration is ignored
+
 See `references/auth-interceptor.md` for all options and chaining multiple interceptors.
 
 ## useStream
@@ -254,11 +279,11 @@ abort();
 Return values:
 
 - `data` — accumulated text from all chunks
-- `isLoading` — connecting / auth checks
-- `isStreaming` — active byte transmission
+- `isStreaming` — `true` from `start()` until the stream completes, fails or is aborted
+- `isLoading` — currently always equal to `isStreaming`. For a "connecting" indicator use `isStreaming && !data`
 - `error` — connection error (abort does NOT set error)
-- `start(variables?)` — launches stream; `variables` become request body
-- `abort()` — cancels stream safely, releases reader lock
+- `start(variables?)` — launches stream; `variables` become request body. It's the same function on every render, so an inline config is fine. Calling it again aborts the running stream, and that stream's late chunks are ignored
+- `abort()` — cancels the stream, also while still connecting (then `start()` rejects with `AbortError`)
 
 See `references/streaming.md` for full API table and async iterator usage.
 
@@ -331,6 +356,8 @@ export const useTodos = () => {
 See `references/error-handling.md` for `mutateAsync` try/catch and `QueryErrorResetBoundary`.
 
 ## Optimistic Updates
+
+This snippet assumes the list query is `{ key: ["todos"] }` without `params`. If it has params, its key is `["todos", params]`. Use that full key, or `queryClient.setQueriesData({ queryKey: ["todos"] }, updater)` to update every matching list.
 
 ```ts
 onMutate: async (variables) => {
