@@ -284,6 +284,7 @@ Return values:
 - `error` — connection error (abort does NOT set error)
 - `start(variables?)` — launches stream; `variables` become request body. It's the same function on every render, so an inline config is fine. Calling it again aborts the running stream, and that stream's late chunks are ignored
 - `abort()` — cancels the stream, also while still connecting (then `start()` rejects with `AbortError`)
+- Streams go through the client's Axios instance (fetch adapter, `responseType: "stream"`), so `baseURL`, default headers, `withCredentials`, XSRF and every `configure` interceptor apply. A failed stream rejects with an `AxiosError`
 
 See `references/streaming.md` for full API table and async iterator usage.
 

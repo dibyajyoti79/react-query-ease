@@ -27,17 +27,5 @@ export const registerAuth = (instance: AxiosInstance, state: AuthState) => {
   legacy.__queueRefresh = state.queueRefresh;
 };
 
-export const getAuthState = (instance: AxiosInstance): AuthState | undefined => {
-  const state = registry.get(instance);
-  if (state) return state;
-
-  // Fallback for instances wired up by a different copy of this package.
-  const legacy = instance as LegacyAuthInstance;
-  if (legacy.__authOptions && legacy.__queueRefresh) {
-    return { options: legacy.__authOptions, queueRefresh: legacy.__queueRefresh };
-  }
-  return undefined;
-};
-
 export const hasAuth = (instance: AxiosInstance): boolean =>
   registry.has(instance);

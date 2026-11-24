@@ -5,6 +5,7 @@
 ### Changes
 
 - **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
+- **Streams are sent through the Axios instance.** `api.stream()` and `useStream` now use Axios' `fetch` adapter (`responseType: "stream"`) instead of calling `fetch` directly. They now get everything your other requests get: `baseURL`, default headers, `withCredentials`, the XSRF cookie header for cookie-based auth, and every interceptor added in `configure`. Token refresh on 401 now goes through the auth interceptor itself instead of a separate copy of that logic.
 
 ### Migration
 
@@ -12,6 +13,9 @@
 |---|---|
 | install with pnpm or yarn and don't already have axios in your app | `pnpm add axios` / `yarn add axios`. npm 7+ installs peer dependencies for you. |
 | use an axios version older than `1.8.2` | Upgrade axios: `npm i axios@latest`. |
+| read `error.response` from a failed stream as a fetch `Response` (for example `error.response.json()`) | A failed stream now rejects with an `AxiosError`. `error.response.status` works as before; the body is on `error.response.data`. |
+| have interceptors in `configure` that shouldn't run on streams | Check for `config.responseType === "stream"` in the interceptor. |
+| test streams in Node or jsdom with a relative URL and no `baseURL` | Give the client an absolute `baseURL` in tests. Node's `Request` can't resolve `/chat` on its own; browsers can. |
 
 ## 0.5.0
 

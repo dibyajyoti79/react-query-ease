@@ -14,14 +14,14 @@ const result = api.useStream<TVariables = void>(config: UseStreamOptions);
 |--------|------|----------|-------------|
 | `url` | `string` | Yes | Endpoint path; resolved against client `baseURL` |
 | `method` | `string` | No | HTTP method (default: `"GET"`) |
-| `headers` | `Record<string, string>` | No | Custom headers for the fetch request |
+| `headers` | `Record<string, string>` | No | Extra headers, merged with the client's defaults |
 | `credentials` | `RequestCredentials` | No | CORS credentials (`omit`, `same-origin`, `include`) |
 | `data` | `unknown` | No | Default request body; a value passed to `start(variables)` replaces it |
 | `signal` | `AbortSignal` | No | Your own abort signal; aborting it stops the stream |
 | `skipAuth` | `boolean` | No | Skip the auth interceptor (no token, no refresh on 401) |
 | `onChunk` | `(chunk: string) => void` | No | Called for each received text fragment |
 | `onComplete` | `() => void` | No | Called when stream terminates successfully |
-| `onError` | `(error: unknown) => void` | No | Called on connection/network error |
+| `onError` | `(error: unknown) => void` | No | Called when the request fails or the stream breaks. Non-2xx gives an `AxiosError` |
 
 ## Return Values
 
@@ -121,7 +121,7 @@ setTimeout(() => controller.abort(), 5000);
 
 If the client uses `createAuthInterceptor`, `useStream` participates in the same refresh lifecycle:
 
-1. Before fetch, the hook resolves and attaches the access token header
+1. The stream goes through the client's Axios instance, so the auth interceptor attaches the access token
 2. If the stream endpoint returns 401, the auth interceptor's refresh queue is invoked
 3. Concurrent refresh requests from other queries coalesce — one network call refreshes all
 4. Stream retries once with the new token automatically

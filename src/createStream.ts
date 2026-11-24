@@ -1,6 +1,5 @@
-import { AxiosInstance, AxiosError, InternalAxiosRequestConfig, Method } from "axios";
+import { AxiosInstance, AxiosError, Method } from "axios";
 import { AuthInterceptorOptions, RefreshResult } from "./interceptors/createAuthInterceptor";
-import { getAuthState } from "./internal/authRegistry";
 
 export type StreamConfig = {
   url: string;
@@ -30,37 +29,10 @@ export type ExtendedAxiosInstance = AxiosInstance & {
   __queueRefresh?: (error: AxiosError) => Promise<RefreshResult>;
 };
 
-// Default check to see if an error should trigger token refresh
-const defaultShouldRefresh = (error: AxiosError) =>
-  error.response?.status === 401;
-
-// Resolves absolute URL combining baseURL and relative URL
-const getAbsoluteUrl = (url: string, baseURL?: string): string => {
-  if (!baseURL) return url;
-  if (/^(?:[a-z]+:)?\/\//i.test(url)) return url;
-
-  const base = baseURL.replace(/\/+$/, "");
-  const path = url.replace(/^\/+/, "");
-  return `${base}/${path}`;
-};
-
-const createMockAxiosError = (
-  response: Response,
-  config: unknown
-): AxiosError =>
-  ({
-    config,
-    response: {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      config,
-      data: null,
-    },
-    isAxiosError: true,
-    name: "AxiosError",
-    message: `Request failed with status code ${response.status}`,
-  } as AxiosError);
+/** Maps fetch's `credentials` to the value Axios' fetch adapter passes through. */
+const toWithCredentials = (credentials?: RequestCredentials) =>
+  // The fetch adapter forwards a string `withCredentials` to fetch as-is.
+  credentials as unknown as boolean | undefined;
 
 export const createStream = async (
   instance: AxiosInstance,
@@ -124,163 +96,50 @@ export const createStream = async (
     }
   };
 
-  // Helper to build merged headers from Axios defaults and config.headers
-  const getMergedHeaders = (
-    configHeaders?: Record<string, string>,
-    method?: string
-  ): Record<string, string> => {
-    const merged: Record<string, string> = {};
+  // The request goes through the Axios instance, so baseURL, default
+  // headers, XSRF handling and every interceptor (including the auth
+  // interceptor's token and single-flight refresh) apply to it too. The
+  // fetch adapter returns the body as a ReadableStream.
+  const openStream = async (): Promise<ReadableStream<Uint8Array>> => {
+    try {
+      const response = await instance.request<ReadableStream<Uint8Array> | null>({
+        url: config.url,
+        method: config.method ?? "GET",
+        headers: config.headers,
+        data: config.data,
+        signal: internalSignal,
+        skipAuth: config.skipAuth,
+        adapter: "fetch",
+        responseType: "stream",
+        ...(config.credentials !== undefined && {
+          withCredentials: toWithCredentials(config.credentials),
+        }),
+      });
 
-    // 1. Common headers from Axios instance defaults
-    const defaults = instance.defaults?.headers;
-    if (defaults) {
-      if (defaults.common) {
-        const common = defaults.common as unknown as Record<string, unknown>;
-        for (const [key, val] of Object.entries(common)) {
-          if (typeof val === "string") {
-            merged[key] = val;
-          }
-        }
+      if (!response.data) {
+        throw new Error("Response body is not readable");
       }
-      if (method) {
-        const methodKey = method.toLowerCase();
-        const methodDefaults = (defaults as Record<string, unknown>)[methodKey] as Record<string, unknown> | undefined;
-        if (methodDefaults) {
-          for (const [key, val] of Object.entries(methodDefaults)) {
-            if (typeof val === "string") {
-              merged[key] = val;
-            }
-          }
-        }
+      return response.data;
+    } catch (error) {
+      // Free the connection held by an error response's unread body.
+      const body = (error as AxiosError | undefined)?.response?.data as
+        | ReadableStream
+        | undefined;
+      body?.cancel?.().catch(() => {});
+
+      // Keep the documented contract: an aborted stream rejects with an
+      // AbortError, not Axios' CanceledError.
+      if (internalSignal.aborted) {
+        throw new DOMException("The stream was aborted", "AbortError");
       }
+      throw error;
     }
-
-    // 2. Override with config headers
-    if (configHeaders) {
-      for (const [key, val] of Object.entries(configHeaders)) {
-        if (val !== undefined && val !== null) {
-          merged[key] = String(val);
-        }
-      }
-    }
-
-    return merged;
-  };
-
-  // Parse and serialize body data
-  let body: BodyInit | null | undefined = undefined;
-  if (config.data !== undefined) {
-    if (typeof config.data === "string") {
-      body = config.data;
-    } else if (
-      config.data instanceof FormData ||
-      config.data instanceof Blob ||
-      config.data instanceof ArrayBuffer
-    ) {
-      body = config.data;
-    } else {
-      body = JSON.stringify(config.data);
-    }
-  }
-
-  // Define executeFetch to support retry on 401
-  const executeFetch = async (isRetry = false): Promise<Response> => {
-    const headers = getMergedHeaders(config.headers, config.method);
-
-    const isJsonBody =
-      config.data !== undefined &&
-      typeof config.data !== "string" &&
-      !(config.data instanceof FormData) &&
-      !(config.data instanceof Blob) &&
-      !(config.data instanceof ArrayBuffer);
-
-    if (isJsonBody) {
-      const hasContentType = Object.keys(headers).some(
-        (h) => h.toLowerCase() === "content-type"
-      );
-
-      if (!hasContentType) {
-        headers["Content-Type"] = "application/json";
-      }
-    }
-
-    const authState = config.skipAuth ? undefined : getAuthState(instance);
-    const authOptions = authState?.options;
-    const queueRefresh = authState?.queueRefresh;
-
-    const mockAxiosConfig = {
-      url: config.url,
-      method: config.method ?? "GET",
-      headers,
-    };
-
-    if (authOptions) {
-      const {
-        getAccessToken,
-        headerName = "Authorization",
-        formatToken = (t: string) => `Bearer ${t}`,
-        shouldSkipAuth,
-      } = authOptions;
-
-      const skipAuth = shouldSkipAuth
-        ? await shouldSkipAuth(
-            mockAxiosConfig as unknown as InternalAxiosRequestConfig
-          )
-        : false;
-
-      if (!skipAuth) {
-        const token = await getAccessToken();
-        if (token) {
-          headers[headerName] = formatToken(token);
-        }
-      }
-    }
-
-    const absoluteUrl = getAbsoluteUrl(config.url, instance.defaults.baseURL);
-
-    const fetchConfig: RequestInit = {
-      method: config.method ?? "GET",
-      headers,
-      signal: internalSignal,
-    };
-    if (config.credentials) {
-      fetchConfig.credentials = config.credentials;
-    }
-    if (body !== undefined) {
-      fetchConfig.body = body;
-    }
-
-    const response = await fetch(absoluteUrl, fetchConfig);
-
-    if (!response.ok) {
-      // If we failed with 401 (or other status defined in shouldRefresh), refresh and retry once
-      if (authOptions && queueRefresh && !isRetry) {
-        const mockError = createMockAxiosError(response, mockAxiosConfig);
-
-        const shouldRefresh = authOptions.shouldRefresh ?? defaultShouldRefresh;
-        if (shouldRefresh(mockError)) {
-          await queueRefresh(mockError);
-          return executeFetch(true);
-        }
-      }
-
-      throw Object.assign(
-        new Error(`Request failed with status ${response.status}`),
-        { response }
-      );
-    }
-
-    return response;
   };
 
   try {
-    const response = await executeFetch();
+    const body = await openStream();
 
-    if (!response.body) {
-      throw new Error("Response body is not readable");
-    }
-
-    const reader = response.body.getReader();
+    const reader = body.getReader();
     const decoder = new TextDecoder("utf-8");
 
     // Close reader immediately if we get aborted during/after connection

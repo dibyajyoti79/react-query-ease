@@ -36,14 +36,14 @@ Pass the config to the hook. It can be an inline object: `start` stays the same 
 | :--- | :--- | :--- |
 | `url` | `string` (Required) | The endpoint path (e.g., `"/chat"`). Resolves against your client's `baseURL`. |
 | `method` | `Method` | HTTP request method. Defaults to `GET`. |
-| `headers` | `Record<string, string>` | Custom headers to append to the fetch request. |
+| `headers` | `Record<string, string>` | Extra headers. Merged with the client's default headers, like any other request. |
 | `credentials` | `RequestCredentials` | CORS credentials setting (`omit`, `same-origin`, or `include`). |
-| `data` | `unknown` | Default request body. A value passed to `start(variables)` replaces it. |
+| `data` | `unknown` | Default request body, serialized by Axios (objects are sent as JSON). A value passed to `start(variables)` replaces it. |
 | `signal` | `AbortSignal` | Your own abort signal. Aborting it stops the stream, like calling `abort()`. |
 | `skipAuth` | `boolean` | Skip the auth interceptor: no token is attached and a 401 doesn't trigger a refresh. |
 | `onChunk` | `(chunk: string) => void` | Event listener fired whenever a text fragment is received. |
 | `onComplete` | `() => void` | Event listener fired when the stream terminates successfully. |
-| `onError` | `(error: unknown) => void` | Event listener fired when a network error or connection failure occurs. |
+| `onError` | `(error: unknown) => void` | Event listener fired when the request fails or the stream breaks. A non-2xx response gives an `AxiosError`, so `error.response?.status` works as for other requests. |
 
 ### Return Value
 
@@ -157,10 +157,12 @@ export function AIAssistant() {
 
 ## Core Implementations Details
 
-### 1. Unified Authentication Shared Concurrency
+### 1. Same Axios instance, same interceptors
+A stream is sent through your client's Axios instance, using Axios' `fetch` adapter with `responseType: "stream"`. So everything that applies to your other requests applies to streams too: `baseURL`, default headers, `withCredentials` and the XSRF cookie header, and every interceptor you added in `configure`.
+
 If your client uses `createAuthInterceptor`, the stream request participates in the exact same lifecycle:
-*   Before calling the fetch endpoint, the hook resolves and appends the access token header.
-*   If the stream receives a `401 Unauthorized`, it invokes the client's token refresh queue.
+*   The auth interceptor attaches the access token before the request goes out.
+*   If the stream receives a `401 Unauthorized`, the interceptor runs the client's token refresh.
 *   If multiple concurrent REST or stream requests trigger a refresh, they **coalesce** into a single refresh network request.
 *   Once tokens are renewed, the stream automatically retries once and continues cleanly.
 
