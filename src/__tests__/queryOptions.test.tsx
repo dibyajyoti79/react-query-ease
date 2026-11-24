@@ -1,9 +1,11 @@
 import React, { Suspense } from "react";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { render, renderHook, screen, waitFor } from "@testing-library/react";
+import * as ReactQuery from "@tanstack/react-query";
 import {
-  HydrationBoundary,
   QueryClientProvider,
+  UseMutationResult,
+  UseQueryResult,
   dehydrate,
   useQueries,
   useQuery,
@@ -13,6 +15,14 @@ import { createApiClient } from "../createApiClient";
 import { createMockAdapter, createWrapper } from "./helpers";
 
 type Todo = { id: number; title: string };
+
+// v5 calls it HydrationBoundary, v4 calls it Hydrate. CI runs both.
+const HydrationBoundary = ((ReactQuery as Record<string, unknown>)
+  .HydrationBoundary ??
+  (ReactQuery as Record<string, unknown>).Hydrate) as React.ComponentType<{
+  state: unknown;
+  children: React.ReactNode;
+}>;
 
 describe("client.queryOptions", () => {
   it("builds the same key useQuery uses, params included", () => {
@@ -169,7 +179,7 @@ describe("select", () => {
 });
 
 describe("default error type", () => {
-  it("follows React Query's default (Error unless registered)", () => {
+  it("follows React Query's default, like TanStack's own hooks", () => {
     const api = createApiClient();
     const { result } = renderHook(
       () => ({
@@ -178,7 +188,12 @@ describe("default error type", () => {
       }),
       { wrapper: createWrapper().wrapper }
     );
-    expectTypeOf(result.current.query.error).toEqualTypeOf<Error | null>();
-    expectTypeOf(result.current.mutation.error).toEqualTypeOf<Error | null>();
+    // Error | null in v5 (unless registered), unknown in v4.
+    expectTypeOf(result.current.query.error).toEqualTypeOf<
+      UseQueryResult["error"]
+    >();
+    expectTypeOf(result.current.mutation.error).toEqualTypeOf<
+      UseMutationResult["error"]
+    >();
   });
 });

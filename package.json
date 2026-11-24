@@ -53,7 +53,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/dibyajyoti79/react-query-ease.git"
+    "url": "git+https://github.com/dibyajyoti79/react-query-ease.git"
   },
   "homepage": "https://github.com/dibyajyoti79/react-query-ease#readme",
   "bugs": {
@@ -66,7 +66,8 @@
     "test": "vitest run",
     "lint": "oxlint",
     "prepublishOnly": "npm run build",
-    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p type-tests"
+    "typecheck": "tsc --noEmit -p .",
+    "typecheck:v5": "tsc --noEmit -p type-tests"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^4.0.0 || ^5.0.0",

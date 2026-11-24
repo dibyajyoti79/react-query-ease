@@ -2,19 +2,35 @@
 
 ## Unreleased
 
+This release closes the gaps that kept production apps from using react-query-ease everywhere: query keys and query functions were only built inside the hook, so prefetching, Next.js SSR and Suspense meant rebuilding them by hand; invalidation keys couldn't depend on the mutation; and some types didn't match TanStack Query's. It also moves streams onto the Axios instance, so they behave like every other request.
+
 ### Features
 
 - **`api.queryOptions(args)`** takes the same arguments as `api.useQuery` and returns the exact `{ queryKey, queryFn, ...options }` the hook uses, `params` included in the key. Use it with `queryClient.prefetchQuery` / `fetchQuery` / `ensureQueryData` (Next.js SSR with `HydrationBoundary`), `useSuspenseQuery`, `useQueries`, `useQuery`, and `getQueryData` / `setQueryData`.
-- **`keyToInvalidate` can be a function**: `(data, variables) => keys`, for keys like `["todos", id]` built from the response or the variables. Return `undefined` to invalidate nothing.
+  *Why:* the hook appends `params` to the key, so a key rebuilt by hand easily misses the cache entry. `api.useQuery` now uses `api.queryOptions` itself, so the two can't drift apart.
+- **`keyToInvalidate` can be a function**: `(data, variables) => keys`, for keys like `["todo", id]` built from the response or the variables. Return `undefined` to invalidate nothing.
+  *Why:* a static key either invalidates too much (every todo) or can't name the one item that changed.
 - **`select` can change the data's shape.** `useQuery` takes a third generic, `TSelected`: `api.useQuery<Todo[], AxiosError, number>({ ..., select: (todos) => todos.length })`. It is also inferred from `select` when you don't pass generics.
+  *Why:* `select` was typed to return the response type, so deriving a count, a list of titles or a lookup map didn't typecheck.
 - New exported types: `ApiQueryArgs`, `ApiQueryOptions`, `ApiMutationArgs`, `InvalidateKeys`, `DefaultError`.
+
+### Fixes
+
+- **A stale 401 no longer triggers a second token refresh.** When a request fails with 401 after another request's refresh has already finished, it is retried with the new access token instead of refreshing again. With rotating refresh tokens, the second refresh could spend an already-used token and log the user out.
 
 ### Changes
 
 - **`TError` now defaults to React Query's default error type** instead of `unknown`. In v5 that is `Register["defaultError"]`, so `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` now applies to `api.useQuery` and `api.useMutation`. Without a registration it is `Error` in v5 and stays `unknown` in v4. This only changes types; if code relied on `error` being `unknown`, pass `unknown` as the second generic.
-
+  *Why:* the explicit `unknown` default overrode the registration, so `error` came back as `unknown` instead of the type you registered, unlike TanStack's own hooks.
 - **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
 - **Streams are sent through the Axios instance.** `api.stream()` and `useStream` now use Axios' `fetch` adapter (`responseType: "stream"`) instead of calling `fetch` directly. They now get everything your other requests get: `baseURL`, default headers, `withCredentials`, the XSRF cookie header for cookie-based auth, and every interceptor added in `configure`. Token refresh on 401 now goes through the auth interceptor itself instead of a separate copy of that logic.
+
+### Docs
+
+- New guide for prefetching, Next.js SSR, Suspense and infinite lists (README and the Claude Code skill's `prefetch-ssr.md`). It was checked against a real Next.js App Router build that prefetches in a Server Component.
+- The skill no longer says the API client file needs `"use client"`, which would have blocked server prefetching.
+- Error-handling examples now register `AxiosError` and read `err.response`, instead of casting the error to a plain interface.
+- Doc snippets are typechecked in CI (`type-tests/`).
 
 ### Migration
 
