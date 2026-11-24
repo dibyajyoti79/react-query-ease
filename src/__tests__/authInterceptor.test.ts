@@ -49,6 +49,46 @@ describe("createAuthInterceptor", () => {
     expect(refreshTokens).toHaveBeenCalledTimes(1);
   });
 
+  it("does not refresh again for a stale 401 that lands after a refresh finished", async () => {
+    let token = "old";
+    let refreshToken = "r1";
+    let releaseSlow!: () => void;
+    const slowGate = new Promise<void>((r) => (releaseSlow = r));
+
+    const { adapter } = createMockAdapter(async (config) => {
+      // /slow was sent with the old token but its 401 arrives late.
+      if (config.url === "/slow" && header(config, "Authorization") === "Bearer old") {
+        await slowGate;
+      }
+      return header(config, "Authorization") === `Bearer ${token}` && token !== "old"
+        ? { data: "ok" }
+        : { status: 401 };
+    });
+    // Rotating refresh tokens: each one is single-use.
+    const refreshTokens = vi.fn(async (ctx: { refreshToken?: string | null }) => {
+      if (ctx.refreshToken !== refreshToken) throw new Error("refresh token reused");
+      refreshToken = `r${Number(refreshToken.slice(1)) + 1}`;
+      return { accessToken: `new-${refreshToken}`, refreshToken };
+    });
+    const api = createApiClient({
+      adapter,
+      configure: createAuthInterceptor({
+        getAccessToken: () => token,
+        getRefreshToken: () => refreshToken,
+        refreshTokens,
+        setTokens: (t) => {
+          token = t.accessToken;
+        },
+      }),
+    });
+
+    const slow = api.get("/slow");
+    await expect(api.get("/fast")).resolves.toBe("ok");
+    releaseSlow();
+    await expect(slow).resolves.toBe("ok");
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+  });
+
   it("calls onRefreshFailure and rejects when the refresh fails", async () => {
     const { adapter } = createServer(() => "never");
     const onRefreshFailure = vi.fn();

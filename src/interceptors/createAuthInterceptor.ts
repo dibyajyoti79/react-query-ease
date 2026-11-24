@@ -59,6 +59,8 @@ export type RefreshResult = {
 
 type AuthRequestConfig = InternalAxiosRequestConfig & {
   __isRetryRequest?: boolean;
+  /** The access token this request was sent with (null if none). */
+  __sentAccessToken?: string | null;
 };
 
 export type AuthInterceptorOptions<
@@ -146,6 +148,7 @@ export const createAuthInterceptor =
       }
 
       const token = await resolveMaybePromise(getAccessToken());
+      (config as AuthRequestConfig).__sentAccessToken = token || null;
       if (!token) {
         return config;
       }
@@ -211,6 +214,17 @@ export const createAuthInterceptor =
         }
 
         config.__isRetryRequest = true;
+
+        // Stale 401: the request went out with a token that has since been
+        // replaced (another request's refresh finished first). Retry with the
+        // current token instead of refreshing again, which would needlessly
+        // spend a rotating refresh token.
+        if (!refreshPromise) {
+          const currentToken = await resolveMaybePromise(getAccessToken());
+          if (currentToken && currentToken !== config.__sentAccessToken) {
+            return instance.request(config);
+          }
+        }
 
         const tokens = await queueRefresh(error);
         ensureHeaders(config, headerName, formatToken(tokens.accessToken));
