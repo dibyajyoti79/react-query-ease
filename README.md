@@ -199,6 +199,47 @@ function TodoList() {
 
 Want the full CRUD + folder structure walkthrough? Check [examples/todo-crud.md](examples/todo-crud.md). Need interceptor reference? See [examples/interceptors.md](examples/interceptors.md). For native streaming, check the [Streaming Guide](examples/streaming.md).
 
+### Prefetching, SSR and TanStack's own hooks
+
+`api.queryOptions(args)` takes the same arguments as `api.useQuery` and returns the exact `{ queryKey, queryFn, ...options }` the hook builds, `params` included in the key. Pass it to anything in TanStack Query:
+
+```tsx
+const todoQuery = (id: number) =>
+  api.queryOptions<Todo>({ key: ["todos", id], url: `/todos/${id}` });
+
+await queryClient.prefetchQuery(todoQuery(1));          // prefetch / Next.js SSR + HydrationBoundary
+const todo = await queryClient.ensureQueryData(todoQuery(1));
+queryClient.setQueryData(todoQuery(1).queryKey, updated);
+
+const { data } = useSuspenseQuery(todoQuery(1));       // v5
+const results = useQueries({ queries: ids.map(todoQuery) });
+```
+
+### Dynamic invalidation
+
+`keyToInvalidate` can be a function of the response and the variables:
+
+```ts
+api.useMutation<Todo, AxiosError, UpdateInput>({
+  url: ({ id }) => `/todos/${id}`,
+  method: "PATCH",
+  keyToInvalidate: (todo, vars) => [["todos", vars.id], ["lists", todo.listId]],
+});
+```
+
+### Types
+
+- **`select` can change the data's shape.** The third generic is the selected type: `api.useQuery<Todo[], AxiosError, number>({ ..., select: (todos) => todos.length })`. Without explicit generics it's inferred from `select`: `select: (todos: Todo[]) => todos.map((t) => t.title)` gives `data: string[] | undefined`.
+- **The error type follows React Query's default.** With TanStack Query v5, register your error type once and every hook uses it:
+
+```ts
+declare module "@tanstack/react-query" {
+  interface Register {
+    defaultError: AxiosError;
+  }
+}
+```
+
 ### Request helpers
 
 Outside of hooks, every client also has plain request helpers. Each one resolves to the response body (`response.data`).
@@ -281,6 +322,7 @@ A pending refresh is rejected after `refreshTimeoutMs` (default `30000`; `0` dis
 | `paramsInKey` | `createApiClient`, `useQuery` | `true` | Appends `params` to the query key, so each set of params is cached separately. Queries without `params` are unaffected. |
 | `cancelable` | `createApiClient` | `true` | Passes React Query's `AbortSignal` to Axios, so `cancelQueries()` and unmounting abort in-flight requests. |
 | `axios` | `useQuery`, `useMutation` | — | Axios config merged last. Use it for any Axios option you want to set explicitly. |
+| `keyToInvalidate` | `useMutation` | — | Keys to invalidate after success: a key, a string, an array of them, or `(data, variables) => keys`. |
 | `body` | `useMutation` | — | `(variables) => body`. Builds the request body. Without it, variables are sent as the body (except for `GET`/`HEAD`) unless `data` is set. |
 | `skipAuth` | any request, `stream()` | `false` | Skips the auth interceptor: no token is attached and a 401 doesn't trigger a refresh. |
 | `refreshTimeoutMs` | `createAuthInterceptor` | `30000` | Rejects a refresh that takes longer than this. |

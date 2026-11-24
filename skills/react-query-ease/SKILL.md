@@ -138,6 +138,9 @@ const { todos, isLoadingTodos } = useTodos();
 - Axios options (`headers`, `params`, `timeout`) go to the request, and React Query options (`staleTime`, `enabled`, `retry`, `select`, etc.) go to `useQuery`; each only reaches its own side
 - `axios: { ... }` — optional Axios config merged last, for explicit overrides
 - Unmounting or `cancelQueries()` aborts the request (client option `cancelable: false` turns this off)
+- `select` can change the shape: `api.useQuery<Todo[], ApiError, number>({ ..., select: (t) => t.length })`
+- `TError` defaults to React Query's default error, so a v5 `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` applies to every hook
+- `api.queryOptions(args)` — same args as `api.useQuery`, returns the exact `{ queryKey, queryFn, ...options }`. Use it for `queryClient.prefetchQuery` / `ensureQueryData` (Next.js SSR with `HydrationBoundary`), `useSuspenseQuery`, `useQueries`, and `queryOptions(args).queryKey` with `getQueryData` / `setQueryData`. Never rebuild the key by hand
 
 ## useMutation
 
@@ -193,6 +196,7 @@ export const useUpdateTodo = () => {
 - If `data` is not set, mutation variables become the request body automatically (except for `GET`/`HEAD`). `DELETE` sends them too; add `body: () => undefined` when the id is only in the URL
 - `body: (variables) => ...` — build the request body yourself, e.g. `body: ({ id, ...rest }) => rest`
 - `keyToInvalidate` accepts a single key, a string, or an array of keys/strings — e.g. `keyToInvalidate: [["todos"], ["stats"]]` to bust multiple caches at once
+- `keyToInvalidate` can also be a function of the response and variables — e.g. `keyToInvalidate: (todo, vars) => [["todos", vars.id], ["lists", todo.listId]]`
 - All React Query mutation options (`onSuccess`, `onError`, `onSettled`, `retry`) pass through
 
 **Using `mutateAsync`** — for async/await with try/catch:

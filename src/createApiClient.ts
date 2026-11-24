@@ -1,8 +1,10 @@
 import axios, { AxiosInstance, AxiosRequestConfig, Method } from "axios";
 import {
+  QueryFunction,
   QueryKey,
   UseMutationOptions,
   UseQueryOptions,
+  UseQueryResult,
   useMutation,
   useQuery,
   useQueryClient,
@@ -23,17 +25,40 @@ const toKeyPart = (params: unknown): unknown =>
 
 const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 
-type QueryOptions<TData, TError> = Omit<
-  UseQueryOptions<TData, TError, TData, QueryKey>,
+/**
+ * React Query's default error type. In v5 this is `Register["defaultError"]`
+ * (`Error` unless you register your own, e.g. `AxiosError`); in v4 it is
+ * `unknown`. Read off `UseQueryResult` so it works with both versions.
+ */
+export type DefaultError = Exclude<UseQueryResult["error"], null>;
+
+type QueryOptions<TData, TError, TSelected = TData> = Omit<
+  UseQueryOptions<TData, TError, TSelected, QueryKey>,
   "queryKey" | "queryFn"
 >;
+
+/**
+ * The `{ queryKey, queryFn, ...options }` object `api.useQuery` builds. Pass it
+ * to any TanStack API: `useQuery`, `useSuspenseQuery`, `useQueries`,
+ * `queryClient.prefetchQuery` / `fetchQuery` / `ensureQueryData`, and use its
+ * `queryKey` with `getQueryData` / `setQueryData`.
+ */
+export type ApiQueryOptions<TData, TError, TSelected = TData> = UseQueryOptions<
+  TData,
+  TError,
+  TSelected,
+  QueryKey
+> & {
+  queryKey: QueryKey;
+  queryFn: QueryFunction<TData, QueryKey>;
+};
 
 type MutationOptions<TData, TError, TVariables> = Omit<
   UseMutationOptions<TData, TError, TVariables, unknown>,
   "mutationFn"
 >;
 
-type UseClientQueryArgs<TData, TError> = {
+export type ApiQueryArgs<TData, TError, TSelected = TData> = {
   key: QueryKey | string;
   /**
    * Append `params` to the query key so each set of params gets its own cache
@@ -43,13 +68,20 @@ type UseClientQueryArgs<TData, TError> = {
   /** Axios config merged last. Use it for keys that clash with React Query options. */
   axios?: AxiosRequestConfig;
 } & AxiosRequestConfig &
-  QueryOptions<TData, TError>;
+  QueryOptions<TData, TError, TSelected>;
 
-type InvalidateKeys = QueryKey | string | Array<QueryKey | string>;
+export type InvalidateKeys = QueryKey | string | Array<QueryKey | string>;
 
-type UseClientMutationArgs<TData, TError, TVariables> = {
+export type ApiMutationArgs<TData, TError, TVariables> = {
   url: string | ((variables: TVariables) => string);
-  keyToInvalidate?: InvalidateKeys;
+  /**
+   * Queries to invalidate after a successful mutation. Pass a function to
+   * build the keys from the response and the variables, e.g.
+   * `(todo, vars) => [["todos"], ["todos", vars.id]]`.
+   */
+  keyToInvalidate?:
+    | InvalidateKeys
+    | ((data: TData, variables: TVariables) => InvalidateKeys | undefined);
   /**
    * Build the request body from the mutation variables. When omitted, the
    * variables are sent as the body (except for GET/HEAD) unless `data` is set.
@@ -164,9 +196,13 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
   const { request, get, post, put, patch, del } =
     createRequestHelpers(instance);
 
-  const useClientQuery = <TData = unknown, TError = unknown>(
-    args: UseClientQueryArgs<TData, TError>
-  ) => {
+  const queryOptions = <
+    TData = unknown,
+    TError = DefaultError,
+    TSelected = TData,
+  >(
+    args: ApiQueryArgs<TData, TError, TSelected>
+  ): ApiQueryOptions<TData, TError, TSelected> => {
     const {
       key,
       paramsInKey = clientParamsInKey,
@@ -183,31 +219,44 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
         ? [...baseKey, toKeyPart(requestConfig.params)]
         : baseKey;
 
-    return useQuery<TData, TError, TData, QueryKey>({
-      ...(reactQueryOptions as QueryOptions<TData, TError>),
+    const queryFn: QueryFunction<TData, QueryKey> = (context) => {
+      const config: AxiosRequestConfig = {
+        ...requestRest,
+        method,
+        ...axiosOverrides,
+      };
+      // Only read context.signal when cancelable: reading it is what tells
+      // React Query the request can be aborted.
+      if (!config.signal && cancelable && context?.signal) {
+        config.signal = context.signal;
+      }
+      return request<TData>(config);
+    };
+
+    return {
+      ...(reactQueryOptions as QueryOptions<TData, TError, TSelected>),
       queryKey,
-      queryFn: (context) => {
-        const config: AxiosRequestConfig = {
-          ...requestRest,
-          method,
-          ...axiosOverrides,
-        };
-        // Only read context.signal when cancelable: reading it is what tells
-        // React Query the request can be aborted.
-        if (!config.signal && cancelable && context?.signal) {
-          config.signal = context.signal;
-        }
-        return request<TData>(config);
-      },
-    });
+      queryFn,
+    };
   };
+
+  const useClientQuery = <
+    TData = unknown,
+    TError = DefaultError,
+    TSelected = TData,
+  >(
+    args: ApiQueryArgs<TData, TError, TSelected>
+  ) =>
+    useQuery<TData, TError, TSelected, QueryKey>(
+      queryOptions<TData, TError, TSelected>(args)
+    );
 
   const useClientMutation = <
     TData = unknown,
-    TError = unknown,
+    TError = DefaultError,
     TVariables = void,
   >(
-    args: UseClientMutationArgs<TData, TError, TVariables>
+    args: ApiMutationArgs<TData, TError, TVariables>
   ) => {
     const queryClient = useQueryClient();
     const {
@@ -221,7 +270,6 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     const { axiosConfig: requestConfig, reactQueryOptions } =
       splitOptions(rest);
     const { method = "POST", ...requestRest } = requestConfig;
-    const keysToInvalidate = toInvalidateKeyArray(keyToInvalidate);
 
     return useMutation<TData, TError, TVariables>({
       ...(reactQueryOptions as MutationOptions<TData, TError, TVariables>),
@@ -253,6 +301,12 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
           await (onSuccess as (...a: unknown[]) => unknown)(...callbackArgs);
         }
 
+        const [data, variables] = callbackArgs as [TData, TVariables];
+        const keysToInvalidate = toInvalidateKeyArray(
+          typeof keyToInvalidate === "function"
+            ? keyToInvalidate(data, variables)
+            : keyToInvalidate
+        );
         if (keysToInvalidate.length > 0) {
           await Promise.all(
             keysToInvalidate.map((key) =>
@@ -277,6 +331,7 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     stream,
     useStream: <TVariables = unknown>(defaultConfig: UseStreamOptions) =>
       useStream<TVariables>(stream, defaultConfig),
+    queryOptions,
     useQuery: useClientQuery,
     useMutation: useClientMutation,
   };

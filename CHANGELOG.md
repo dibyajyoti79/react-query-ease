@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+### Features
+
+- **`api.queryOptions(args)`** takes the same arguments as `api.useQuery` and returns the exact `{ queryKey, queryFn, ...options }` the hook uses, `params` included in the key. Use it with `queryClient.prefetchQuery` / `fetchQuery` / `ensureQueryData` (Next.js SSR with `HydrationBoundary`), `useSuspenseQuery`, `useQueries`, `useQuery`, and `getQueryData` / `setQueryData`.
+- **`keyToInvalidate` can be a function**: `(data, variables) => keys`, for keys like `["todos", id]` built from the response or the variables. Return `undefined` to invalidate nothing.
+- **`select` can change the data's shape.** `useQuery` takes a third generic, `TSelected`: `api.useQuery<Todo[], AxiosError, number>({ ..., select: (todos) => todos.length })`. It is also inferred from `select` when you don't pass generics.
+- New exported types: `ApiQueryArgs`, `ApiQueryOptions`, `ApiMutationArgs`, `InvalidateKeys`, `DefaultError`.
+
 ### Changes
+
+- **`TError` now defaults to React Query's default error type** instead of `unknown`. In v5 that is `Register["defaultError"]`, so `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` now applies to `api.useQuery` and `api.useMutation`. Without a registration it is `Error` in v5 and stays `unknown` in v4. This only changes types; if code relied on `error` being `unknown`, pass `unknown` as the second generic.
 
 - **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
 - **Streams are sent through the Axios instance.** `api.stream()` and `useStream` now use Axios' `fetch` adapter (`responseType: "stream"`) instead of calling `fetch` directly. They now get everything your other requests get: `baseURL`, default headers, `withCredentials`, the XSRF cookie header for cookie-based auth, and every interceptor added in `configure`. Token refresh on 401 now goes through the auth interceptor itself instead of a separate copy of that logic.
