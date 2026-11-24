@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, Method } from "axios";
+import { AxiosInstance, AxiosRequestConfig, Method, create } from "axios";
 import {
   DefaultError,
   QueryFunction,
@@ -181,7 +181,7 @@ export const createApiClient = (options: ApiClientOptions = {}) => {
     cancelable = true,
     ...axiosConfig
   } = options;
-  const instance = axios.create(axiosConfig);
+  const instance = create(axiosConfig);
   if (configure) {
     configure(instance);
   }

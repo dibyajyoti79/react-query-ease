@@ -23,7 +23,7 @@ Minimal typed wrapper combining Axios + React Query. Create per-service API clie
 npm install react-query-ease axios @tanstack/react-query
 ```
 
-Requires TanStack Query v5, axios 1.8.2+ and React 18+. Use v5 option names (`gcTime`, `throwOnError`, `isPending`, `placeholderData: keepPreviousData`); v4 names like `cacheTime` are not React Query options here and get sent to Axios.
+Requires TanStack Query v5, axios 1.21.1+ and React 18+. Use v5 option names (`gcTime`, `throwOnError`, `isPending`, `placeholderData: keepPreviousData`); v4 names like `cacheTime` are not React Query options here and get sent to Axios.
 
 Wrap app in `QueryClientProvider`:
 

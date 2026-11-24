@@ -121,7 +121,7 @@ The skill runs on its own when you ask your agent about data fetching, React Que
 npm install react-query-ease axios @tanstack/react-query
 ```
 
-Requires `@tanstack/react-query` 5, `axios` 1.8.2 or later and React 18 or later.
+Requires `@tanstack/react-query` 5, `axios` 1.21.1 or later and React 18 or later.
 
 ### Quick example
 
@@ -363,7 +363,7 @@ A pending refresh is rejected after `refreshTimeoutMs` (default `30000`; `0` dis
 |---|---|
 | TanStack Query v4 is no longer supported (peer range is now `^5.0.0`) | Upgrade to v5 first with TanStack's [migration guide](https://tanstack.com/query/latest/docs/framework/react/guides/migrating-to-v5) and codemod. |
 | React 18+ is required | Upgrade React (TanStack Query v5 requires it). |
-| axios is a peer dependency (`^1.8.2`) | npm 7+ installs it for you. With pnpm or yarn: `pnpm add axios` / `yarn add axios`. |
+| axios is a peer dependency (`^1.21.1`) | npm 7+ installs it for you. With pnpm or yarn: `pnpm add axios` / `yarn add axios`. If your app has an older axios, upgrade it: every version before 1.20.0 has security advisories. |
 | `error` is typed with React Query's default error (`Error`, or your registered `defaultError`) instead of `unknown` | Register `AxiosError` (see [Types](#types)), or pass `unknown` as the second generic. |
 | A failed stream rejects with an `AxiosError` instead of a fetch `Response` error | Read the body from `error.response.data`; `error.response.status` works as before. |
 | Streams go through the Axios instance and its interceptors | To skip an interceptor for streams, check `config.responseType === "stream"`. |
