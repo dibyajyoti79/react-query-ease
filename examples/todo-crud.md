@@ -66,6 +66,19 @@ export const useSearchTodos = (filters: TodoSearchFilters) => {
   };
 };
 
+export const useTodo = (id: string) => {
+  const query = todosApi.useQuery<Todo>({
+    url: `/todos/${id}`,
+    key: ["todo", id],
+  });
+
+  return {
+    todo: query.data,
+    isTodoLoading: query.isLoading,
+    ...query,
+  };
+};
+
 export const useCreateTodo = () => {
   const { mutate, isPending, ...rest } = todosApi.useMutation<
     Todo,
@@ -92,7 +105,8 @@ export const useUpdateTodo = () => {
   >({
     url: (variables) => `/todos/${variables.id}`,
     method: "PATCH",
-    keyToInvalidate: ["todos"],
+    // Refresh the lists and this todo's detail query, built from the variables
+    keyToInvalidate: (_todo, variables) => [["todos"], ["todo", variables.id]],
   });
 
   return {
@@ -200,5 +214,28 @@ export function Todos() {
   );
 }
 ```
+
+### 4. Prefetch on hover (optional)
+
+`todosApi.queryOptions` takes the same arguments as `useQuery` and returns the same `{ queryKey, queryFn }`, so a prefetch fills exactly the cache entry `useTodo` reads:
+
+```tsx
+import { useQueryClient } from "@tanstack/react-query";
+import { todosApi } from "../config/apiClients";
+
+const todoQuery = (id: string) =>
+  todosApi.queryOptions<Todo>({ url: `/todos/${id}`, key: ["todo", id] });
+
+function TodoLink({ id, title }: { id: string; title: string }) {
+  const queryClient = useQueryClient();
+  return (
+    <a href={`/todos/${id}`} onMouseEnter={() => queryClient.prefetchQuery(todoQuery(id))}>
+      {title}
+    </a>
+  );
+}
+```
+
+For Next.js server prefetching with `HydrationBoundary`, see [Prefetching, SSR and TanStack's own hooks](../README.md#prefetching-ssr-and-tanstacks-own-hooks).
 
 That’s it: keep clients in `config`, export named hooks from `hooks`, and call them from your components. Adjust invalidate logic (`queryClient.invalidateQueries`) or optimistic updates as you would with any React Query setup.

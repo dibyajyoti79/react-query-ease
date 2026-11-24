@@ -11,10 +11,11 @@
 ### Features
 
 - 🧩 **One client per service.** `createApiClient({ baseURL })` gives you `useQuery`, `useMutation`, and plain `get/post/put/patch/delete` helpers.
-- 🔁 **Auto cache invalidation.** `keyToInvalidate: ["todos"]` refetches queries after a successful mutation.
+- 🔁 **Auto cache invalidation.** `keyToInvalidate: ["todos"]` refetches queries after a successful mutation, or build the keys from the response: `(todo, vars) => [["todo", vars.id]]`.
+- 🚀 **Prefetching, SSR and Suspense.** `api.queryOptions()` returns the exact `{ queryKey, queryFn }` the hook uses, for `prefetchQuery`, Next.js `HydrationBoundary`, `useSuspenseQuery`, `useQueries` and `setQueryData`.
 - 🔐 **Single-flight token refresh.** `createAuthInterceptor` attaches tokens and refreshes once when several requests get a 401 at the same time, then retries the queued requests.
 - 🌊 **Streaming hooks.** `useStream` streams chunked and SSE responses, such as LLM or AI chat output, and shares the same auth refresh.
-- 🦺 **TypeScript-first.** Generic `TData` / `TError` / `TVariables`, with every Axios and React Query option passed through.
+- 🦺 **TypeScript-first.** Generic `TData` / `TError` / `TVariables`, a `select` that can change the data's type, and your registered `defaultError` (e.g. `AxiosError`) used by every hook.
 - ⚛️ **Works with React and Next.js.** Ships ESM and CJS, tree-shakeable with `sideEffects: false`.
 
 ### Why not just TanStack Query + Axios?
@@ -63,6 +64,7 @@ What you stop writing by hand:
 | Cancellation on unmount | Pass `signal` yourself, every time | On by default |
 | Invalidate after a mutation | `useQueryClient` + `onSuccess` | `keyToInvalidate: ["todos"]` |
 | Unwrapping `response.data` | Every call | Done for you |
+| Prefetch, SSR, `useSuspenseQuery` | Rebuild the same key and query function again | `api.queryOptions({ ... })`, the same object the hook uses |
 | Token refresh on 401 | Write your own interceptor, queue and retry | `createAuthInterceptor`: one refresh for many concurrent 401s, then retries |
 | Streaming (SSE, LLM output) | Not covered; hand-roll `fetch` + a reader | `useStream`, sharing the same auth and refresh |
 
@@ -84,7 +86,7 @@ TanStack Query gives you caching, background refetching, retries and request ded
 - Your backend has an OpenAPI spec: a code generator such as Orval can generate typed hooks for you.
 - You only call one or two endpoints: plain TanStack Query is fine.
 - You use GraphQL: use a GraphQL client such as Apollo or urql, or TanStack Query with a GraphQL fetcher.
-- You fetch only on the server, in React Server Components or route handlers: React Query's hooks run only in client components.
+- You fetch only on the server, in React Server Components or route handlers, and never on the client: React Query's hooks run only in client components. (Prefetching on the server to hydrate client components is supported; see [Prefetching, SSR and TanStack's own hooks](#prefetching-ssr-and-tanstacks-own-hooks).)
 
 ### Claude Code skill
 
@@ -214,6 +216,28 @@ queryClient.setQueryData(todoQuery(1).queryKey, updated);
 const { data } = useSuspenseQuery(todoQuery(1));       // v5
 const results = useQueries({ queries: ids.map(todoQuery) });
 ```
+
+**Next.js App Router.** Keep the client and the query builders in a file without `"use client"`, so Server Components can import them:
+
+```tsx
+// lib/api/queries.ts (no "use client")
+export const todosQuery = () => api.queryOptions<Todo[]>({ key: ["todos"], url: "/todos" });
+
+// app/todos/page.tsx (Server Component)
+import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
+
+export default async function TodosPage() {
+  const queryClient = new QueryClient();
+  await queryClient.prefetchQuery(todosQuery());
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <Todos /> {/* "use client": useQuery(todosQuery()) or api.useQuery with the same args */}
+    </HydrationBoundary>
+  );
+}
+```
+
+On the server, `baseURL` must be absolute, and a token getter that reads `localStorage` won't work there. Forward cookies or headers yourself, or use a separate server client. Set a `staleTime` above `0` on the client so hydrated data isn't refetched straight away.
 
 ### Dynamic invalidation
 

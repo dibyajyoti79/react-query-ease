@@ -67,6 +67,8 @@ export const useUserProfile = (id: string) => {
 
 ## Global Error Handler
 
+With a registered `defaultError` (see `error-handling.md`), `error` below is already typed and the `as Error` casts can go.
+
 Attach once to the QueryClient to handle all query/mutation errors centrally (e.g. toast notifications):
 
 ```tsx

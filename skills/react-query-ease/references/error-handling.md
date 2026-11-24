@@ -1,8 +1,36 @@
 # Error Handling Patterns
 
+## Register the Error Type (v5)
+
+Axios rejects with an `AxiosError`. Register it once and every `api.useQuery` / `api.useMutation`, plus TanStack's own hooks and `QueryCache` / `MutationCache` callbacks, types `error` with it:
+
+```ts
+// lib/api/react-query.d.ts
+import type { AxiosError } from "axios";
+
+export interface ApiErrorBody {
+  message: string;
+  code?: string;
+}
+
+declare module "@tanstack/react-query" {
+  interface Register {
+    defaultError: AxiosError<ApiErrorBody>;
+  }
+}
+```
+
+```ts
+const { error } = api.useQuery<Todo[]>({ url: "/todos", key: ["todos"] });
+error?.response?.status;        // number | undefined
+error?.response?.data.message;  // string | undefined
+```
+
+Without a registration, `TError` defaults to `Error` in v5 and `unknown` in v4.
+
 ## Error State in Hooks
 
-Always type `TError` on `useQuery` and `useMutation`:
+Or type `TError` per hook on `useQuery` and `useMutation`:
 
 ```ts
 // lib/api/hooks/useTodo.ts
@@ -67,6 +95,8 @@ export const useCreateTodo = () => {
 Using `mutateAsync` for inline error handling:
 
 ```tsx
+import { isAxiosError } from "axios";
+
 const { createTodoAsync } = useCreateTodo();
 
 const handleSubmit = async () => {
@@ -74,11 +104,13 @@ const handleSubmit = async () => {
     const newTodo = await createTodoAsync({ title: "Buy milk" });
     toast.success(`Created: ${newTodo.title}`);
   } catch (err) {
-    const apiErr = err as ApiError;
-    if (apiErr.status === 409) {
+    // Axios rejects with an AxiosError; the server's body is on err.response.data
+    if (isAxiosError<ApiErrorBody>(err) && err.response?.status === 409) {
       toast.error("Todo already exists");
     } else {
-      toast.error(apiErr.message);
+      toast.error(isAxiosError<ApiErrorBody>(err)
+        ? err.response?.data.message ?? err.message
+        : "Something went wrong");
     }
   }
 };

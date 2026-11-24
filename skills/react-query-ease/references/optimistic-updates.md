@@ -3,6 +3,8 @@
 Update the cache immediately on mutate; roll back on error.
 
 > **Cache keys and `params`:** `useQuery` adds `params` to the key. These examples assume the list query is `{ key: ["todos"] }` with no params, so its key is exactly `["todos"]`. If the list query has params, for example `{ key: ["todos"], params: { page } }`, its key is `["todos", { page }]`. In that case, either pass that full key to `getQueryData` and `setQueryData`, or use `queryClient.setQueriesData({ queryKey: ["todos"] }, updater)` to update every matching list. `cancelQueries` and `invalidateQueries` already match by prefix.
+>
+> The safest way to get an exact key is from the query definition itself: `const todosQuery = (page: number) => api.queryOptions<Todo[]>({ key: ["todos"], url: "/todos", params: { page } })`, then `queryClient.setQueryData(todosQuery(page).queryKey, updater)`.
 
 ## Toggle (single item update)
 
@@ -136,4 +138,5 @@ export const useCreateTodo = () => {
 - Always snapshot before update — `getQueryData` before `setQueryData`
 - Return snapshot from `onMutate` — React Query passes it as `context` to `onError`/`onSettled`
 - Always `invalidateQueries` in `onSettled` — syncs temp state with real server data
-- Match the exact key — `getQueryData` and `setQueryData` need the full key, including `params` if the query has any
+- Match the exact key — `getQueryData` and `setQueryData` need the full key, including `params` if the query has any. Take it from `api.queryOptions(...).queryKey` instead of rebuilding it
+- When there's no optimistic update, prefer `keyToInvalidate`. A function form refreshes only what changed: `keyToInvalidate: (todo, vars) => [["todos"], ["todo", vars.id]]`

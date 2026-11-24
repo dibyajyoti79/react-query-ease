@@ -1,6 +1,6 @@
 ---
 name: react-query-ease
-description: Sets up react-query-ease — a typed Axios + React Query wrapper — with API clients, typed useQuery/useMutation hooks, auto-invalidation, auth token refresh, and streaming hooks. Use this skill whenever the user asks about data fetching, API client setup, React Query, Axios, token refresh, auth interceptors, streaming/SSE hooks, or typed HTTP hooks in React or Next.js — even if they don't mention "react-query-ease" by name. Trigger on phrases like "set up API calls", "how do I fetch data in Next.js", "React Query setup", "Axios interceptor", "refresh token logic", "typed fetch hook", "useQuery hook", "useMutation hook", "streaming response React", "SSE hook", or "API client TypeScript".
+description: Sets up react-query-ease — a typed Axios + React Query wrapper — with API clients, typed useQuery/useMutation hooks, auto-invalidation, auth token refresh, and streaming hooks. Use this skill whenever the user asks about data fetching, API client setup, React Query, Axios, token refresh, auth interceptors, streaming/SSE hooks, or typed HTTP hooks in React or Next.js — even if they don't mention "react-query-ease" by name. Also use it for prefetching, Next.js SSR with HydrationBoundary, useSuspenseQuery / useQueries with typed API calls, and typing React Query errors as AxiosError. Trigger on phrases like "set up API calls", "how do I fetch data in Next.js", "React Query setup", "Axios interceptor", "refresh token logic", "typed fetch hook", "useQuery hook", "useMutation hook", "streaming response React", "SSE hook", or "API client TypeScript".
 license: MIT
 ---
 
@@ -14,7 +14,8 @@ Minimal typed wrapper combining Axios + React Query. Create per-service API clie
 2. **Create client** — `createApiClient` with `baseURL` in `src/config/apiClients.ts`
 3. **Write typed hooks** — `useQuery` / `useMutation` wrappers in `src/hooks/`
 4. **Add auth** — `createAuthInterceptor` in `configure` callback
-5. **Add streaming** — `useStream` for chunked/SSE endpoints
+5. **Prefetch / SSR / Suspense** — `api.queryOptions` with `prefetchQuery`, `HydrationBoundary`, `useSuspenseQuery`
+6. **Add streaming** — `useStream` for chunked/SSE endpoints
 
 ## Installation
 
@@ -60,7 +61,7 @@ export default function RootLayout({
 }
 ```
 
-> All hooks and client files must include `"use client"` at the top. Server Components cannot use React Query hooks.
+> Files that call hooks must include `"use client"` at the top; Server Components cannot use React Query hooks. Keep the client (`lib/api/config.ts`) and `api.queryOptions` builders **without** `"use client"`, so Server Components can import them to prefetch (see "Prefetching, SSR and Suspense").
 
 ## Client Setup
 
@@ -342,6 +343,21 @@ See `references/query-client-config.md` for full defaults table and global error
 
 ## Error Handling
 
+On TanStack Query v5, register the error type once and every `api.useQuery` / `api.useMutation` uses it, no second generic needed. Axios rejects with an `AxiosError`, so register that (with your server's error body), not a plain interface:
+
+```ts
+// lib/api/react-query.d.ts
+import type { AxiosError } from "axios";
+
+declare module "@tanstack/react-query" {
+  interface Register {
+    defaultError: AxiosError<{ message: string }>;
+  }
+}
+```
+
+Or pass `TError` per hook:
+
 ```ts
 export const useTodos = () => {
   const query = api.useQuery<Todo[], ApiError>({
@@ -360,9 +376,57 @@ export const useTodos = () => {
 
 See `references/error-handling.md` for `mutateAsync` try/catch and `QueryErrorResetBoundary`.
 
+## Prefetching, SSR and Suspense
+
+`api.queryOptions(args)` takes the same args as `api.useQuery` and returns the exact `{ queryKey, queryFn, ...options }`, with `params` in the key. Define each query once and reuse it everywhere:
+
+```ts
+// lib/api/queries.ts (no "use client")
+import { api } from "./config";
+
+export const todosQuery = (page = 1) =>
+  api.queryOptions<Todo[]>({ key: ["todos"], url: "/todos", params: { page } });
+export const todoQuery = (id: number) =>
+  api.queryOptions<Todo>({ key: ["todo", id], url: `/todos/${id}` });
+```
+
+```tsx
+// app/todos/page.tsx (Server Component)
+import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
+import { todosQuery } from "@/lib/api/queries";
+
+export default async function TodosPage() {
+  const queryClient = new QueryClient();
+  await queryClient.prefetchQuery(todosQuery());
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <Todos />
+    </HydrationBoundary>
+  );
+}
+```
+
+```tsx
+// "use client" component
+const { data } = useQuery({ ...todosQuery(), staleTime: 60_000 }); // or api.useQuery with the same args
+const { data: todo } = useSuspenseQuery(todoQuery(id));            // v5, inside <Suspense>
+const results = useQueries({ queries: ids.map(todoQuery) });
+queryClient.setQueryData(todoQuery(id).queryKey, updated);
+await queryClient.ensureQueryData(todoQuery(id));                  // e.g. in a router loader
+```
+
+**Rules:**
+
+- Never rebuild a key by hand for `getQueryData` / `setQueryData`; use `xQuery(...).queryKey`, which includes `params`
+- On the server, `baseURL` must be absolute, and token getters that read `localStorage` don't work. Forward cookies/headers or use a separate server client
+- Set `staleTime` > 0 on the client, so hydrated data isn't refetched immediately
+- There is no `api.useInfiniteQuery`; use TanStack's `useInfiniteQuery` with `api.get` in `queryFn`
+
+See `references/prefetch-ssr.md` for prefetch-on-hover, Suspense and infinite lists.
+
 ## Optimistic Updates
 
-This snippet assumes the list query is `{ key: ["todos"] }` without `params`. If it has params, its key is `["todos", params]`. Use that full key, or `queryClient.setQueriesData({ queryKey: ["todos"] }, updater)` to update every matching list.
+This snippet assumes the list query is `{ key: ["todos"] }` without `params`. If it has params, its key is `["todos", params]`. Get the exact key from `api.queryOptions(...).queryKey` (see "Prefetching, SSR and Suspense"), or use `queryClient.setQueriesData({ queryKey: ["todos"] }, updater)` to update every matching list.
 
 ```ts
 onMutate: async (variables) => {

@@ -70,6 +70,14 @@ export const useSearchTodos = (filters: TodoSearchFilters) => {
   };
 };
 
+export const useTodo = (id: string) => {
+  const query = todosApi.useQuery<Todo>({
+    url: `/todos/${id}`,
+    key: ["todo", id],
+  });
+  return { todo: query.data, isTodoLoading: query.isLoading, ...query };
+};
+
 export const useCreateTodo = () => {
   const { mutate, isPending, ...rest } = todosApi.useMutation<
     Todo,
@@ -91,7 +99,8 @@ export const useUpdateTodo = () => {
   >({
     url: (variables) => `/todos/${variables.id}`,
     method: "PATCH",
-    keyToInvalidate: ["todos"],
+    // The list, plus this todo's detail query (see useTodo below)
+    keyToInvalidate: (_todo, variables) => [["todos"], ["todo", variables.id]],
   });
   return { updateTodo: mutate, isUpdatingTodo: isPending, ...rest };
 };
@@ -193,4 +202,7 @@ export function Todos() {
 - **`keyToInvalidate`** — use the same key you pass to `useQuery`'s `key`. It matches by prefix, so `["todos"]` also refreshes `["todos", "search", { q }]`
 - **`params` are part of the cache key** — don't repeat them in `key`; each set of params gets its own cache entry
 - **Dynamic URLs** — pass `(variables) => string` function when URL contains variable segments
-- **TypeScript generics** — `useMutation<TData, TError, TVariables>` gives full type safety on `mutate` call sites
+- **Dynamic invalidation** — `keyToInvalidate: (data, variables) => keys` builds keys like `["todo", id]` from the response or the variables
+- **`select` can change the type** — `todosApi.useQuery<Todo[], ApiError, number>({ ..., select: (t) => t.length })`, or annotate the param and let it infer: `select: (t: Todo[]) => t.map((x) => x.title)`
+- **Reuse queries with `queryOptions`** — `todosApi.queryOptions(args)` is the same `{ queryKey, queryFn }` the hook uses; pass it to `prefetchQuery`, `useSuspenseQuery`, `useQueries` and `setQueryData` (see `prefetch-ssr.md`)
+- **TypeScript generics** — `useMutation<TData, TError, TVariables>` gives full type safety on `mutate` call sites. Register `defaultError` once to skip the `TError` generic (see `error-handling.md`)
