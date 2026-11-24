@@ -11,7 +11,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60_000,   // 5 min — data stays fresh, no background refetch
-      gcTime: 10 * 60_000,     // 10 min — keep unused cache before GC (was cacheTime pre-v5)
+      gcTime: 10 * 60_000,     // 10 min — keep unused cache before GC (called cacheTime in v4)
       retry: 2,                // retry failed queries twice
       refetchOnWindowFocus: false, // disable noisy refetch on tab switch
     },

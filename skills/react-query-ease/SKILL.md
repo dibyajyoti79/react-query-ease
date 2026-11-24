@@ -23,6 +23,8 @@ Minimal typed wrapper combining Axios + React Query. Create per-service API clie
 npm install react-query-ease axios @tanstack/react-query
 ```
 
+Requires TanStack Query v5, axios 1.8.2+ and React 18+. Use v5 option names (`gcTime`, `throwOnError`, `isPending`, `placeholderData: keepPreviousData`); v4 names like `cacheTime` are not React Query options here and get sent to Axios.
+
 Wrap app in `QueryClientProvider`:
 
 ```tsx
@@ -140,7 +142,7 @@ const { todos, isLoadingTodos } = useTodos();
 - `axios: { ... }` — optional Axios config merged last, for explicit overrides
 - Unmounting or `cancelQueries()` aborts the request (client option `cancelable: false` turns this off)
 - `select` can change the shape: `api.useQuery<Todo[], ApiError, number>({ ..., select: (t) => t.length })`
-- `TError` defaults to React Query's default error, so a v5 `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` applies to every hook
+- `TError` defaults to React Query's default error, so a `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` applies to every hook
 - `api.queryOptions(args)` — same args as `api.useQuery`, returns the exact `{ queryKey, queryFn, ...options }`. Use it for `queryClient.prefetchQuery` / `ensureQueryData` (Next.js SSR with `HydrationBoundary`), `useSuspenseQuery`, `useQueries`, and `queryOptions(args).queryKey` with `getQueryData` / `setQueryData`. Never rebuild the key by hand
 
 ## useMutation
@@ -343,7 +345,7 @@ See `references/query-client-config.md` for full defaults table and global error
 
 ## Error Handling
 
-On TanStack Query v5, register the error type once and every `api.useQuery` / `api.useMutation` uses it, no second generic needed. Axios rejects with an `AxiosError`, so register that (with your server's error body), not a plain interface:
+Register the error type once and every `api.useQuery` / `api.useMutation` uses it, no second generic needed. Axios rejects with an `AxiosError`, so register that (with your server's error body), not a plain interface:
 
 ```ts
 // lib/api/react-query.d.ts
@@ -409,7 +411,7 @@ export default async function TodosPage() {
 ```tsx
 // "use client" component
 const { data } = useQuery({ ...todosQuery(), staleTime: 60_000 }); // or api.useQuery with the same args
-const { data: todo } = useSuspenseQuery(todoQuery(id));            // v5, inside <Suspense>
+const { data: todo } = useSuspenseQuery(todoQuery(id));            // inside <Suspense>
 const results = useQueries({ queries: ids.map(todoQuery) });
 queryClient.setQueryData(todoQuery(id).queryKey, updated);
 await queryClient.ensureQueryData(todoQuery(id));                  // e.g. in a router loader

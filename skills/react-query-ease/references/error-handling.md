@@ -1,6 +1,6 @@
 # Error Handling Patterns
 
-## Register the Error Type (v5)
+## Register the Error Type
 
 Axios rejects with an `AxiosError`. Register it once and every `api.useQuery` / `api.useMutation`, plus TanStack's own hooks and `QueryCache` / `MutationCache` callbacks, types `error` with it:
 
@@ -26,7 +26,7 @@ error?.response?.status;        // number | undefined
 error?.response?.data.message;  // string | undefined
 ```
 
-Without a registration, `TError` defaults to `Error` in v5 and `unknown` in v4.
+Without a registration, `TError` defaults to `Error`.
 
 ## Error State in Hooks
 

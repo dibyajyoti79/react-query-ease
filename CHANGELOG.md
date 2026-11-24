@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
 
-This release closes the gaps that kept production apps from using react-query-ease everywhere: query keys and query functions were only built inside the hook, so prefetching, Next.js SSR and Suspense meant rebuilding them by hand; invalidation keys couldn't depend on the mutation; and some types didn't match TanStack Query's. It also moves streams onto the Axios instance, so they behave like every other request.
+The first stable release. From here on, breaking changes only come with a new major version. 1.0 supports TanStack Query v5 only (tested from 5.0.0 to the latest, 5.108.4), and removes the compatibility code that was scheduled for removal in 1.0.
+
+It also closes the gaps that kept production apps from using react-query-ease everywhere: query keys and query functions were only built inside the hook, so prefetching, Next.js SSR and Suspense meant rebuilding them by hand; invalidation keys couldn't depend on the mutation; and some types didn't match TanStack Query's. It also moves streams onto the Axios instance, so they behave like every other request.
+
+### Breaking changes
+
+- **TanStack Query v4 is no longer supported.** The peer range is now `@tanstack/react-query ^5.0.0` (was `^4.0.0 || ^5.0.0`).
+  *Why:* v5 has been stable since October 2023. Supporting v4 meant untyped workarounds for its different callback signatures and option names, and v5 features (`useSuspenseQuery`, `HydrationBoundary`, `Register`) couldn't be used in the library or its docs.
+- **React 18 or later is required** (was `>=16.8.0`). TanStack Query v5 itself requires React 18.
+- **v4-only option names are no longer recognised as React Query options**: `cacheTime`, `useErrorBoundary`, `keepPreviousData`, `isDataEqual`, `suspense` and `context`. v5 ignores them, so they did nothing before; now they are forwarded to Axios like any unknown key. Use the v5 names: `gcTime`, `throwOnError`, `placeholderData: keepPreviousData`, `structuralSharing`, `useSuspenseQuery`.
+- **`TError` now defaults to React Query's default error type** instead of `unknown`. That is `Register["defaultError"]`, so `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` now applies to `api.useQuery` and `api.useMutation`. Without a registration it is `Error`. This only changes types; if code relied on `error` being `unknown`, pass `unknown` as the second generic.
+  *Why:* the explicit `unknown` default overrode the registration, so `error` came back as `unknown` instead of the type you registered, unlike TanStack's own hooks.
+- **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
+- **Streams are sent through the Axios instance.** `api.stream()` and `useStream` now use Axios' `fetch` adapter (`responseType: "stream"`) instead of calling `fetch` directly. They now get everything your other requests get: `baseURL`, default headers, `withCredentials`, the XSRF cookie header for cookie-based auth, and every interceptor added in `configure`. Token refresh on 401 now goes through the auth interceptor itself instead of a separate copy of that logic.
+- **Removed the private `__authOptions` and `__queueRefresh` fields** that `createAuthInterceptor` set on the Axios instance. They were deprecated in 0.4.0 and scheduled for removal in 1.0.
+- **Removed unused types:** `SimpleApiClient` (use `ReturnType<typeof createApiClient>`) and the deprecated `ExtendedAxiosInstance`.
 
 ### Features
 
@@ -12,18 +27,11 @@ This release closes the gaps that kept production apps from using react-query-ea
   *Why:* a static key either invalidates too much (every todo) or can't name the one item that changed.
 - **`select` can change the data's shape.** `useQuery` takes a third generic, `TSelected`: `api.useQuery<Todo[], AxiosError, number>({ ..., select: (todos) => todos.length })`. It is also inferred from `select` when you don't pass generics.
   *Why:* `select` was typed to return the response type, so deriving a count, a list of titles or a lookup map didn't typecheck.
-- New exported types: `ApiQueryArgs`, `ApiQueryOptions`, `ApiMutationArgs`, `InvalidateKeys`, `DefaultError`.
+- New exported types: `ApiQueryArgs`, `ApiQueryOptions`, `ApiMutationArgs`, `InvalidateKeys`.
 
 ### Fixes
 
 - **A stale 401 no longer triggers a second token refresh.** When a request fails with 401 after another request's refresh has already finished, it is retried with the new access token instead of refreshing again. With rotating refresh tokens, the second refresh could spend an already-used token and log the user out.
-
-### Changes
-
-- **`TError` now defaults to React Query's default error type** instead of `unknown`. In v5 that is `Register["defaultError"]`, so `declare module "@tanstack/react-query" { interface Register { defaultError: AxiosError } }` now applies to `api.useQuery` and `api.useMutation`. Without a registration it is `Error` in v5 and stays `unknown` in v4. This only changes types; if code relied on `error` being `unknown`, pass `unknown` as the second generic.
-  *Why:* the explicit `unknown` default overrode the registration, so `error` came back as `unknown` instead of the type you registered, unlike TanStack's own hooks.
-- **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
-- **Streams are sent through the Axios instance.** `api.stream()` and `useStream` now use Axios' `fetch` adapter (`responseType: "stream"`) instead of calling `fetch` directly. They now get everything your other requests get: `baseURL`, default headers, `withCredentials`, the XSRF cookie header for cookie-based auth, and every interceptor added in `configure`. Token refresh on 401 now goes through the auth interceptor itself instead of a separate copy of that logic.
 
 ### Docs
 
@@ -36,6 +44,12 @@ This release closes the gaps that kept production apps from using react-query-ea
 
 | If you… | Do this |
 |---|---|
+| use TanStack Query v4 | Upgrade to v5 first with TanStack's [v5 migration guide](https://tanstack.com/query/latest/docs/framework/react/guides/migrating-to-v5) and its codemod, then upgrade react-query-ease. |
+| use React 16 or 17 | Upgrade to React 18 or later (required by TanStack Query v5). |
+| pass `cacheTime`, `useErrorBoundary`, `keepPreviousData`, `isDataEqual` or `suspense` to `api.useQuery` | Use `gcTime`, `throwOnError`, `placeholderData: keepPreviousData` (imported from `@tanstack/react-query`), `structuralSharing`, or `useSuspenseQuery(api.queryOptions(...))`. |
+| relied on `error` being typed `unknown` | Register your error type (see the README), or pass `unknown` as the second generic. |
+| read `instance.__authOptions` or `instance.__queueRefresh` | These were private. Keep your own reference to the options you pass to `createAuthInterceptor`. |
+| import `SimpleApiClient` | Use `ReturnType<typeof createApiClient>`. |
 | install with pnpm or yarn and don't already have axios in your app | `pnpm add axios` / `yarn add axios`. npm 7+ installs peer dependencies for you. |
 | use an axios version older than `1.8.2` | Upgrade axios: `npm i axios@latest`. |
 | read `error.response` from a failed stream as a fetch `Response` (for example `error.response.json()`) | A failed stream now rejects with an `AxiosError`. `error.response.status` works as before; the body is on `error.response.data`. |
