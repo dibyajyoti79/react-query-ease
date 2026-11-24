@@ -19,7 +19,7 @@ Minimal typed wrapper combining Axios + React Query. Create per-service API clie
 ## Installation
 
 ```bash
-npm install react-query-ease @tanstack/react-query
+npm install react-query-ease axios @tanstack/react-query
 ```
 
 Wrap app in `QueryClientProvider`:

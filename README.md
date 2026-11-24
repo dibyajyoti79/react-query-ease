@@ -116,8 +116,7 @@ The skill runs on its own when you ask your agent about data fetching, React Que
 ### Install
 
 ```bash
-npm install react-query-ease
-npm install react @tanstack/react-query
+npm install react-query-ease axios @tanstack/react-query
 ```
 
 ### Quick example

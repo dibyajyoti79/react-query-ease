@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- **axios is now a peer dependency** instead of a regular dependency, with a minimum of `1.8.2` (which fixes CVE-2025-27152). The package now uses your app's own axios, so you no longer risk two copies in the bundle or clashing `AxiosInstance` types, and you control axios security updates.
+
+### Migration
+
+| If you… | Do this |
+|---|---|
+| install with pnpm or yarn and don't already have axios in your app | `pnpm add axios` / `yarn add axios`. npm 7+ installs peer dependencies for you. |
+| use an axios version older than `1.8.2` | Upgrade axios: `npm i axios@latest`. |
+
 ## 0.5.0
 
 Bug fixes that keep existing code working. Two of them change behaviour, and each has a one-line opt-out.
